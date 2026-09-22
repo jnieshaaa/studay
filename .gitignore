@@ -1,0 +1,110 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+Thumbs.db
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ & VS Code
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# Flutter / Dart / Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication & Obfuscation
+app.*.symbols
+app.*.map.json
+
+# Android Studio & Build Artifacts
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# ==============================================================================
+# SENSITIVE DATA, DATABASE CREDENTIALS & SECRETS (Never commit to Git/GitHub)
+# ==============================================================================
+
+# Environment files & Secrets
+.env
+.env.*
+!.env.example
+*.env
+env.json
+secrets.json
+config.json
+*.key
+*.pem
+*.cert
+*.crt
+
+# Database & Local Storage Data (SQLite, Hive, Realm, Dumps)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
+*.realm
+*.hive
+*.lock
+*.sql
+*.dump
+database/
+db/
+local_data/
+personal_data/
+userdata/
+exports/
+backups/
+
+# Backend & Cloud Service Credentials (Firebase, Supabase, AWS, etc.)
+**/android/app/google-services.json
+**/ios/Runner/GoogleService-Info.plist
+**/macos/Runner/GoogleService-Info.plist
+lib/firebase_options.dart
+supabase_keys.*
+aws-exports.js
+amplifyconfiguration.dart
+
+# Keystores & Signing Keys
+*.keystore
+*.jks
+**/android/key.properties
+**/android/app/key.properties
+**/ios/Runner/ExportOptions.plist
+
+# Personal Documents, Proposals, Notes & Exports
+*.docx
+*.doc
+*.pdf
+*.csv
+*.tsv
+proposal_extracted.txt
+*proposal*.*
+*extracted*.*
+notes/
+private/
+temp/
+tmp/
