@@ -15,6 +15,7 @@ class ExamParticipantPlayState {
   final String? activeMatchingLeft;
   final bool isSubmitting;
   final ExamParticipant? submissionResult;
+  final List<ExamResponse> lastResponses;
   final String? errorMessage;
 
   const ExamParticipantPlayState({
@@ -26,6 +27,7 @@ class ExamParticipantPlayState {
     this.activeMatchingLeft,
     this.isSubmitting = false,
     this.submissionResult,
+    this.lastResponses = const [],
     this.errorMessage,
   });
 
@@ -44,6 +46,7 @@ class ExamParticipantPlayState {
     bool clearActiveMatchingLeft = false,
     bool? isSubmitting,
     ExamParticipant? submissionResult,
+    List<ExamResponse>? lastResponses,
     String? errorMessage,
     bool clearError = false,
   }) {
@@ -58,6 +61,7 @@ class ExamParticipantPlayState {
           : (activeMatchingLeft ?? this.activeMatchingLeft),
       isSubmitting: isSubmitting ?? this.isSubmitting,
       submissionResult: submissionResult ?? this.submissionResult,
+      lastResponses: lastResponses ?? this.lastResponses,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
@@ -212,6 +216,7 @@ class ExamParticipantController extends StateNotifier<ExamParticipantPlayState> 
       state = state.copyWith(
         isSubmitting: false,
         submissionResult: result,
+        lastResponses: responses,
       );
       return result;
     } catch (e) {

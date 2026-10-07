@@ -55,7 +55,6 @@ class QuestionCard extends StatelessWidget {
                       ),
                     ),
                     CustomBadge.questionType(question.questionType),
-                    CustomBadge.difficulty(question.difficulty),
                   ],
                 ),
               ),

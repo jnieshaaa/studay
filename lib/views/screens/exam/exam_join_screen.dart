@@ -36,7 +36,7 @@ class _ExamJoinScreenState extends ConsumerState<ExamJoinScreen> {
     super.dispose();
   }
 
-  void _onJoin() {
+  Future<void> _onJoin() async {
     final code = _codeController.text.trim().toUpperCase();
     final nickname = _nicknameController.text.trim();
 
@@ -52,20 +52,24 @@ class _ExamJoinScreenState extends ConsumerState<ExamJoinScreen> {
 
     try {
       final examService = ref.read(examServiceProvider);
-      final exam = examService.getExamByCode(code);
+      final exam = await examService.getOrFetchExamByCode(code);
       if (exam == null) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'No exam found with code "$code". Check with your exam maker.';
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'No exam found with code "$code". Check with your exam maker.';
+          });
+        }
         return;
       }
 
       if (exam.isExpired) {
-        setState(() {
-          _isLoading = false;
-          _errorMessage = 'This exam has closed or expired.';
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'This exam has closed or expired.';
+          });
+        }
         return;
       }
 
@@ -74,18 +78,20 @@ class _ExamJoinScreenState extends ConsumerState<ExamJoinScreen> {
         nickname: nickname.isEmpty ? 'Participant_${code.substring(0, 3)}' : nickname,
       );
 
-      setState(() => _isLoading = false);
-
-      // Navigate to self-paced exam play screen
-      context.pushReplacement(
-        '/exam/play',
-        extra: ExamParticipantParam(exam, participant),
-      );
+      if (mounted) {
+        setState(() => _isLoading = false);
+        context.pushReplacement(
+          '/exam/play',
+          extra: ExamParticipantParam(exam, participant),
+        );
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+        });
+      }
     }
   }
 

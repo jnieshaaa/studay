@@ -78,13 +78,26 @@ class FlashcardsScreen extends ConsumerWidget {
         ? card.matchingPairs.map((p) => '${p.leftText} ➔ ${p.rightText}').join('\n')
         : (card.choices.where((c) => c.isCorrect).firstOrNull?.choiceText ?? 'See explanation');
 
+    final displayText = state.isFlipped ? correctAnswer : card.questionText;
+    final isCodeOrMultiline = displayText.contains('\n') ||
+        displayText.contains('{') ||
+        displayText.contains('class ') ||
+        displayText.contains('function ') ||
+        displayText.contains('=>');
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Flashcards', style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text('Flashcards Focus', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          if (state.currentIndex > 0)
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+              tooltip: 'Previous Card',
+              onPressed: controller.previousCard,
+            ),
           Center(
             child: Padding(
-              padding: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(left: 8, right: 16),
               child: Text(
                 '${state.currentIndex + 1}/${state.deck.length}',
                 style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
@@ -121,12 +134,11 @@ class FlashcardsScreen extends ConsumerWidget {
                     },
                     child: GradientCard(
                       key: ValueKey(state.isFlipped),
-                      padding: const EdgeInsets.all(28),
+                      padding: const EdgeInsets.all(24),
                       borderColor: state.isFlipped
                           ? AppColors.secondary.withValues(alpha: 0.6)
                           : AppColors.primary.withValues(alpha: 0.4),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -136,7 +148,7 @@ class FlashcardsScreen extends ConsumerWidget {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              state.isFlipped ? 'ANSWER / EXPLANATION' : 'QUESTION PROMPT',
+                              state.isFlipped ? 'ANSWER / BACK' : 'QUESTION / FRONT',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
@@ -145,29 +157,50 @@ class FlashcardsScreen extends ConsumerWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 24),
-                          Text(
-                            state.isFlipped ? correctAnswer : card.questionText,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              height: 1.45,
-                              color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: Center(
+                              child: SingleChildScrollView(
+                                physics: const BouncingScrollPhysics(),
+                                child: Container(
+                                  width: double.infinity,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    displayText,
+                                    textAlign: isCodeOrMultiline ? TextAlign.left : TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: isCodeOrMultiline ? 15 : 18,
+                                      fontFamily: isCodeOrMultiline ? 'monospace' : null,
+                                      fontWeight: isCodeOrMultiline ? FontWeight.w600 : FontWeight.w700,
+                                      height: 1.45,
+                                      color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                           if (state.isFlipped && card.explanation.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              card.explanation,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                card.explanation,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontStyle: FontStyle.italic,
+                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                ),
                               ),
                             ),
                           ],
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 16),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [

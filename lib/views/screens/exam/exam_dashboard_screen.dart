@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/responsive.dart';
 import '../../../controllers/providers.dart';
@@ -22,6 +23,23 @@ class ExamDashboardScreen extends ConsumerStatefulWidget {
 
 class _ExamDashboardScreenState extends ConsumerState<ExamDashboardScreen> {
   int _selectedTabIndex = 0;
+  RealtimeChannel? _realtimeChannel;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final service = ref.read(examServiceProvider);
+      service.syncParticipantsFromRemote(widget.examId);
+      _realtimeChannel = service.subscribeToLiveParticipants(widget.examId);
+    });
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +89,10 @@ class _ExamDashboardScreenState extends ConsumerState<ExamDashboardScreen> {
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.secondary),
             tooltip: 'Refresh Results',
-            onPressed: () => setState(() {}),
+            onPressed: () async {
+              await ref.read(examServiceProvider).syncParticipantsFromRemote(widget.examId);
+              if (mounted) setState(() {});
+            },
           ),
           IconButton(
             icon: const Icon(Icons.home),

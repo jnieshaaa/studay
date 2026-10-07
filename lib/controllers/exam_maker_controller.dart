@@ -5,6 +5,7 @@ import '../models/question_model.dart';
 import '../core/utils/code_generator.dart';
 import 'providers.dart';
 import 'study_controller.dart';
+import 'auth_controller.dart';
 
 class ExamMakerState {
   final String title;
@@ -28,7 +29,7 @@ class ExamMakerState {
 
   const ExamMakerState({
     this.title = '',
-    this.subject = 'General Knowledge',
+    this.subject = '',
     this.description = '',
     this.questions = const [],
     this.questionOrder = QuestionOrder.shuffled,
@@ -47,7 +48,8 @@ class ExamMakerState {
     this.sectionOrder = Exam.defaultSectionOrder,
   });
 
-  bool get isValid => title.trim().isNotEmpty && questions.isNotEmpty;
+  bool get isValid =>
+      title.trim().isNotEmpty && subject.trim().isNotEmpty && questions.isNotEmpty;
   bool get isEditing => editingExamId != null;
 
   ExamMakerState copyWith({
@@ -138,6 +140,12 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
     state = state.copyWith(questions: updated, clearError: true);
   }
 
+  void addQuestions(List<Question> newQuestions) {
+    if (newQuestions.isEmpty) return;
+    final updated = List<Question>.from(state.questions)..addAll(newQuestions);
+    state = state.copyWith(questions: updated, clearError: true);
+  }
+
   void updateQuestion(int index, Question question) {
     if (index >= 0 && index < state.questions.length) {
       final updated = List<Question>.from(state.questions);
@@ -210,6 +218,10 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
       state = state.copyWith(errorMessage: 'Please provide an exam title.');
       return null;
     }
+    if (state.subject.trim().isEmpty) {
+      state = state.copyWith(errorMessage: 'Please provide a subject category.');
+      return null;
+    }
     if (state.questions.isEmpty) {
       state = state.copyWith(errorMessage: 'Please add at least one question.');
       return null;
@@ -257,9 +269,10 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
       }
 
       // Handle publishing brand new exam
+      final currentUser = _ref.read(authControllerProvider).currentUser;
       final newExam = Exam(
         id: CodeGenerator.generateId('exam'),
-        creatorId: 'maker_local',
+        creatorId: currentUser?.id ?? currentUser?.name ?? 'maker_local',
         title: state.title.trim(),
         subject: state.subject.trim().isNotEmpty ? state.subject.trim() : 'General Knowledge',
         description: state.description.trim(),

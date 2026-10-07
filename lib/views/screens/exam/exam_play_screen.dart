@@ -64,9 +64,10 @@ class _ExamPlayScreenState extends ConsumerState<ExamPlayScreen> {
           backgroundColor: AppColors.error,
         ),
       );
+      final playState = ref.read(examParticipantControllerProvider(widget.param));
       context.pushReplacement(
         '/exam/result',
-        extra: ExamResultParam(widget.param.exam, result),
+        extra: ExamResultParam(widget.param.exam, result, responses: playState.lastResponses),
       );
     }
   }
@@ -302,9 +303,10 @@ class _ExamPlayScreenState extends ConsumerState<ExamPlayScreen> {
                         if (state.isLastQuestion) {
                           final result = await controller.submitExam();
                           if (result != null && context.mounted) {
+                            final playState = ref.read(examParticipantControllerProvider(widget.param));
                             context.pushReplacement(
                               '/exam/result',
-                              extra: ExamResultParam(state.exam, result),
+                              extra: ExamResultParam(state.exam, result, responses: playState.lastResponses),
                             );
                           }
                         } else {

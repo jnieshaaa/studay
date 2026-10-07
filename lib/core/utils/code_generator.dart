@@ -27,4 +27,15 @@ class CodeGenerator {
     final rand = _random.nextInt(0xFFFF).toRadixString(16);
     return '${prefix}_${now}_$rand';
   }
+
+  /// Generates a unique, conflict-free Subject Share Code (e.g. "SUB-ENG-7K2M9P")
+  static String generateSubjectCode(String subjectName, {int length = 6}) {
+    final clean = subjectName
+        .trim()
+        .toUpperCase()
+        .replaceAll(RegExp(r'[^A-Z0-9]'), '');
+    final prefix = clean.length > 4 ? clean.substring(0, 4) : (clean.isNotEmpty ? clean : 'SUB');
+    final randToken = generateExamCode(length: length);
+    return 'SUB-$prefix-$randToken';
+  }
 }

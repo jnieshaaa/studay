@@ -87,6 +87,15 @@ class FlashcardController extends StateNotifier<FlashcardState> {
     );
   }
 
+  void previousCard() {
+    if (state.currentIndex > 0) {
+      state = state.copyWith(
+        currentIndex: state.currentIndex - 1,
+        isFlipped: false,
+      );
+    }
+  }
+
   void reset() {
     state = state.copyWith(
       currentIndex: 0,

@@ -6,7 +6,6 @@ import '../models/question_model.dart';
 import '../models/user_progress_model.dart';
 import '../models/quiz_session_model.dart';
 import '../models/exam_model.dart';
-import 'seed_data_service.dart';
 
 class LocalStorageService {
   static const String _keyQuestions = 'quizz_questions_v2';
@@ -16,6 +15,7 @@ class LocalStorageService {
   static const String _keyCreatedExams = 'quizz_created_exams_v2';
   static const String _keyCurrentUser = 'quizz_current_user_v2';
   static const String _keyUsersList = 'quizz_users_list_v2';
+  static const String _keySubjectBundles = 'quizz_subject_bundles_v2';
 
   SharedPreferences? _prefs;
 
@@ -28,15 +28,20 @@ class LocalStorageService {
     await init();
     final jsonStr = _prefs?.getString(_keyQuestions);
     if (jsonStr == null || jsonStr.isEmpty) {
-      final initialQuestions = SeedDataService.getInitialQuestions();
-      await saveQuestions(initialQuestions);
-      return initialQuestions;
+      return [];
     }
     try {
       final list = jsonDecode(jsonStr) as List<dynamic>;
-      return list.map((q) => Question.fromJson(q as Map<String, dynamic>)).toList();
+      const legacyMockIds = {
+        'q_fil_1', 'q_fil_2', 'q_eng_1', 'q_eng_2', 'q_mth_1', 'q_mth_2',
+        'q_bio_1', 'q_bio_2', 'q_chem_1', 'q_chem_2', 'q_mth_dyn_1', 'q_mth_geo_1',
+      };
+      return list
+          .map((q) => Question.fromJson(q as Map<String, dynamic>))
+          .where((q) => !legacyMockIds.contains(q.id))
+          .toList();
     } catch (e) {
-      return SeedDataService.getInitialQuestions();
+      return [];
     }
   }
 
@@ -103,7 +108,11 @@ class LocalStorageService {
     if (jsonStr == null || jsonStr.isEmpty) return [];
     try {
       final list = jsonDecode(jsonStr) as List<dynamic>;
-      return list.map((e) => Exam.fromJson(e as Map<String, dynamic>)).toList();
+      const legacyMockIds = {'exam_sample_bio', 'exam_fil_1', 'exam_eng_1', 'exam_mth_1', 'exam_mth_2'};
+      return list
+          .map((e) => Exam.fromJson(e as Map<String, dynamic>))
+          .where((e) => !legacyMockIds.contains(e.id))
+          .toList();
     } catch (e) {
       return [];
     }
@@ -153,6 +162,33 @@ class LocalStorageService {
       existing.add(subject);
     }
     await saveCustomSubjects(existing);
+  }
+
+  // --- Subject Share Bundles (Offline & Device-to-Device) ---
+  Future<Map<String, Map<String, dynamic>>> loadAllSubjectBundles() async {
+    await init();
+    final jsonStr = _prefs?.getString(_keySubjectBundles);
+    if (jsonStr == null || jsonStr.isEmpty) return {};
+    try {
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      return map.map((k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<Map<String, dynamic>?> loadSubjectBundle(String code) async {
+    final all = await loadAllSubjectBundles();
+    final normalized = code.trim().toUpperCase().replaceAll(' ', '');
+    return all[normalized];
+  }
+
+  Future<void> saveSubjectBundle(String code, Map<String, dynamic> bundle) async {
+    await init();
+    final all = await loadAllSubjectBundles();
+    final normalized = code.trim().toUpperCase().replaceAll(' ', '');
+    all[normalized] = bundle;
+    await _prefs?.setString(_keySubjectBundles, jsonEncode(all));
   }
 
   // --- User Accounts (Dynamic / Offline-First) ---

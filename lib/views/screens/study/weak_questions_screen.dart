@@ -90,7 +90,7 @@ class WeakQuestionsScreen extends ConsumerWidget {
               const SizedBox(height: 24),
             ],
 
-            // Per-Subject Accuracy List (From Proposal v2 Section 9)
+            // Per-Subject Accuracy Breakdown
             Text(
               'YOUR PERFORMANCE BY SUBJECT',
               style: TextStyle(

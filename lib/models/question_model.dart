@@ -47,6 +47,22 @@ class QuestionChoice {
     this.sortOrder = 0,
   });
 
+  QuestionChoice copyWith({
+    String? id,
+    String? questionId,
+    String? choiceText,
+    bool? isCorrect,
+    int? sortOrder,
+  }) {
+    return QuestionChoice(
+      id: id ?? this.id,
+      questionId: questionId ?? this.questionId,
+      choiceText: choiceText ?? this.choiceText,
+      isCorrect: isCorrect ?? this.isCorrect,
+      sortOrder: sortOrder ?? this.sortOrder,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'question_id': questionId,
@@ -76,6 +92,20 @@ class MatchingPair {
     required this.leftText,
     required this.rightText,
   });
+
+  MatchingPair copyWith({
+    String? id,
+    String? questionId,
+    String? leftText,
+    String? rightText,
+  }) {
+    return MatchingPair(
+      id: id ?? this.id,
+      questionId: questionId ?? this.questionId,
+      leftText: leftText ?? this.leftText,
+      rightText: rightText ?? this.rightText,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,

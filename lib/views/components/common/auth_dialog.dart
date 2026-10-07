@@ -108,7 +108,7 @@ class _AuthDialogState extends ConsumerState<AuthDialog> {
               Text(
                 _isSignUp
                     ? 'Create your account to build, organize, and save your own subjects and quizzes across all devices.'
-                    : 'Log in to open all your created subjects (Filipino, English, Math) and quizzes anytime.',
+                    : 'Log in to open all your created subjects and quizzes anytime.',
                 style: TextStyle(
                   fontSize: 13,
                   color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,

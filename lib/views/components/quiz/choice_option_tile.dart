@@ -87,8 +87,12 @@ class ChoiceOptionTile extends StatelessWidget {
                   : null,
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildIndicator(isDark, labelBgColor, labelTextColor),
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: _buildIndicator(isDark, labelBgColor, labelTextColor),
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -97,13 +101,21 @@ class ChoiceOptionTile extends StatelessWidget {
                       fontSize: 15,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                       color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                      fontFamily: text.contains('\n') ? 'monospace' : null,
+                      height: 1.4,
                     ),
                   ),
                 ),
                 if (isRevealed && isCorrect)
-                  const Icon(Icons.check_circle, color: AppColors.success, size: 22)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.check_circle, color: AppColors.success, size: 22),
+                  )
                 else if (isRevealed && isSelected && !isCorrect)
-                  const Icon(Icons.cancel, color: AppColors.error, size: 22),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.cancel, color: AppColors.error, size: 22),
+                  ),
               ],
             ),
           ),

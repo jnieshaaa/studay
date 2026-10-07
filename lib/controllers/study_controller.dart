@@ -128,15 +128,14 @@ class StudyController extends StateNotifier<StudyState> {
     state = state.copyWith(isLoading: true);
     final storage = _ref.read(localStorageServiceProvider);
     await storage.init();
+    if (!mounted) return;
 
     final customSubjects = await storage.loadCustomSubjects();
+    if (!mounted) return;
     final examService = _ref.read(examServiceProvider);
 
-    // Merge seed subjects + custom subjects + subjects derived from allExams
+    // Merge custom subjects + subjects derived from allExams
     final subjectMap = <String, Subject>{};
-    for (final s in SeedDataService.getSubjects()) {
-      subjectMap[s.id] = s;
-    }
     for (final s in customSubjects) {
       subjectMap[s.id] = s;
     }
@@ -167,6 +166,7 @@ class StudyController extends StateNotifier<StudyState> {
 
     // Questions from storage + questions from all exams
     final questionsFromStorage = await storage.loadQuestions();
+    if (!mounted) return;
     final questionMap = <String, Question>{};
     for (final q in questionsFromStorage) {
       questionMap[q.id] = q;
@@ -177,7 +177,15 @@ class StudyController extends StateNotifier<StudyState> {
       final subjName = exam.effectiveSubject;
       final subj = subjects.firstWhere(
         (s) => s.name.toLowerCase() == subjName.toLowerCase(),
-        orElse: () => subjects.first,
+        orElse: () => subjects.isNotEmpty
+            ? subjects.first
+            : Subject(
+                id: 'subj_${subjName.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
+                name: subjName,
+                description: '',
+                icon: 'school',
+                sortOrder: 1,
+              ),
       );
       for (final q in exam.questions) {
         if (!questionMap.containsKey(q.id)) {
@@ -191,6 +199,7 @@ class StudyController extends StateNotifier<StudyState> {
 
     final allQuestions = questionMap.values.toList();
     final progress = await storage.loadProgress();
+    if (!mounted) return;
 
     state = state.copyWith(
       subjects: subjects,

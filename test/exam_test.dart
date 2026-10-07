@@ -12,6 +12,8 @@ import 'package:quizz_app/controllers/providers.dart';
 import 'package:quizz_app/controllers/study_controller.dart';
 import 'package:quizz_app/controllers/exam_maker_controller.dart';
 import 'package:quizz_app/controllers/exam_participant_controller.dart';
+import 'package:quizz_app/core/utils/bulk_question_parser.dart';
+import 'package:quizz_app/controllers/flashcard_controller.dart';
 
 void main() {
   setUp(() {
@@ -41,7 +43,7 @@ void main() {
   group('Exam Service & Grading Tests', () {
     test('Published exam can be joined with 6-char code and graded correctly', () async {
       final storage = LocalStorageService();
-      final examService = ExamService(storage);
+      final examService = ExamService(storage, seedDefaultExams: true);
 
       // Pre-seeded demo exam
       final exam = examService.getExamByCode('4F9K2Q');
@@ -199,7 +201,7 @@ void main() {
 
     test('Subject Cards grouping: Exams are assigned to subjects (Filipino, English, Math)', () {
       final storage = LocalStorageService();
-      final examService = ExamService(storage);
+      final examService = ExamService(storage, seedDefaultExams: true);
 
       final allExams = examService.allExams;
       final Map<String, List<Exam>> examsBySubject = {};
@@ -227,7 +229,7 @@ void main() {
 
     test('Guest takers can join and take exams with 6-char code without account/login', () {
       final storage = LocalStorageService();
-      final examService = ExamService(storage);
+      final examService = ExamService(storage, seedDefaultExams: true);
 
       // Guest taker with no account signs in with code
       final participant = examService.joinExam(
@@ -561,6 +563,521 @@ void main() {
       // Last two MUST be multiple choice (Part 3)
       expect(preparedQuestions[4].questionType, QuestionType.multipleChoice);
       expect(preparedQuestions[5].questionType, QuestionType.multipleChoice);
+    });
+  });
+
+  group('Bulk Question Parser & Import Tests', () {
+    test('Parses multiple questions separated by blank lines (user format)', () {
+      const rawInput = '''
+1. Which keyword declares a block-scoped variable that cannot be reassigned?
+A) var
+B) let
+C) const
+D) static
+
+2. Which of the following is the correct syntax for a single-line comment in JavaScript?
+A) <!-- comment -->
+B) # comment
+C) // comment
+D) /* comment */
+
+3. Which HTML tag and attribute combination correctly links an external JavaScript file called main.js?
+A) <script href="main.js"></script>
+B) <script src="main.js"></script>
+C) <javascript link="main.js"></javascript>
+D) <link rel="script" href="main.js">
+
+4. Which of the following represents a valid JSON string?
+A) "{ 'name': 'John', 'age': 30 }"
+B) '{ "name": "John", "age": 30 }'
+C) '{ name: "John", age: 30 }'
+D) '{ "name": "John", "age": 30, }'
+
+5. How do you access the first element of an array named colors?
+A) colors[0]
+B) colors[1]
+C) colors.first()
+D) colors(0)
+''';
+
+      final parsed = BulkQuestionParser.parse(rawInput);
+      expect(parsed.length, 5);
+
+      // Question 1
+      expect(
+        parsed[0].questionText,
+        'Which keyword declares a block-scoped variable that cannot be reassigned?',
+      );
+      expect(parsed[0].choices.length, 4);
+      expect(parsed[0].choices, ['var', 'let', 'const', 'static']);
+      expect(parsed[0].correctChoiceIndex, 0); // Defaults to first choice for creator to edit
+
+      // Question 2
+      expect(
+        parsed[1].questionText,
+        'Which of the following is the correct syntax for a single-line comment in JavaScript?',
+      );
+      expect(parsed[1].choices, ['<!-- comment -->', '# comment', '// comment', '/* comment */']);
+
+      // Question 3
+      expect(
+        parsed[2].questionText,
+        'Which HTML tag and attribute combination correctly links an external JavaScript file called main.js?',
+      );
+      expect(parsed[2].choices[1], '<script src="main.js"></script>');
+
+      // Question 4
+      expect(
+        parsed[3].questionText,
+        'Which of the following represents a valid JSON string?',
+      );
+      expect(parsed[3].choices[1], '\'{ "name": "John", "age": 30 }\'');
+
+      // Question 5
+      expect(
+        parsed[4].questionText,
+        'How do you access the first element of an array named colors?',
+      );
+      expect(parsed[4].choices[0], 'colors[0]');
+    });
+
+    test('Parses answers and explanations when provided', () {
+      const inputWithAnswer = '''
+1. What is the capital of France?
+A) Berlin
+B) Madrid
+C) Paris
+D) Rome
+Answer: C
+Explanation: Paris is the capital and largest city of France.
+''';
+
+      final parsed = BulkQuestionParser.parse(inputWithAnswer);
+      expect(parsed.length, 1);
+      expect(parsed[0].questionText, 'What is the capital of France?');
+      expect(parsed[0].correctChoiceIndex, 2); // Choice C
+      expect(parsed[0].explanation, 'Paris is the capital and largest city of France.');
+    });
+
+    test('Parses inline asterisk/correct indicator on choice line', () {
+      const inputWithAsterisk = '''
+1. Which is an immutable variable?
+A) var
+B) let
+*C) const
+D) function
+''';
+
+      final parsed = BulkQuestionParser.parse(inputWithAsterisk);
+      expect(parsed.length, 1);
+      expect(parsed[0].choices, ['var', 'let', 'const', 'function']);
+      expect(parsed[0].correctChoiceIndex, 2); // Choice C marked with *
+    });
+
+    test('Parses multi-line code choices with prefixes on own lines', () {
+      const codeSnippetInput = '''
+How should a custom error class correctly inherit from the built-in Error class?
+A)
+JavaScript
+class CustomError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CustomError";
+  }
+}
+B)
+JavaScript
+class CustomError implements Error {
+  constructor(message) {
+    this.message = message;
+  }
+}
+C)
+JavaScript
+class CustomError {
+  constructor(message) {
+    Error.call(this, message);
+  }
+}
+D)
+JavaScript
+class CustomError extends Object {
+  constructor(message) {
+    this.error = message;
+  }
+}
+''';
+
+      final parsed = BulkQuestionParser.parse(codeSnippetInput);
+      expect(parsed.length, 1);
+      expect(
+        parsed[0].questionText,
+        'How should a custom error class correctly inherit from the built-in Error class?',
+      );
+      expect(parsed[0].choices.length, 4);
+      expect(parsed[0].choices[0], contains('class CustomError extends Error'));
+      expect(parsed[0].choices[0], contains('super(message);'));
+      expect(parsed[0].choices[1], contains('class CustomError implements Error'));
+      expect(parsed[0].choices[2], contains('Error.call(this, message);'));
+      expect(parsed[0].choices[3], contains('class CustomError extends Object'));
+    });
+
+    test('Bulk imported questions integrate into ExamMakerController and preserve subject', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(examMakerControllerProvider.notifier);
+      notifier.setTitle('JavaScript Basics');
+      notifier.setSubject('Web Development');
+
+      const raw = '''
+1. Which keyword declares a block-scoped variable?
+A) var
+B) let
+C) const
+D) static
+
+2. Single line comment?
+A) <!--
+B) //
+C) #
+D) /*
+''';
+
+      final parsed = BulkQuestionParser.parse(raw);
+      final questions = parsed
+          .map((p) => p.toQuestion(subject: 'Web Development'))
+          .toList();
+
+      notifier.addQuestions(questions);
+
+      final state = container.read(examMakerControllerProvider);
+      expect(state.questions.length, 2);
+      expect(state.questions[0].effectiveCategory, 'Web Development');
+      expect(state.questions[0].choices.length, 4);
+      expect(state.questions[1].questionText, 'Single line comment?');
+    });
+
+    test('ExamService retrieves responses for a participant and grades right vs wrong', () {
+      final storage = LocalStorageService();
+      final examService = ExamService(storage, seedDefaultExams: true);
+
+      final exam = examService.getExamByCode('4F9K2Q')!;
+      final participant = examService.joinExam(code: '4F9K2Q', nickname: 'Bob');
+
+      final q1 = exam.questions.first;
+      final correctChoice = q1.choices.firstWhere((c) => c.isCorrect);
+
+      final responses = [
+        ExamResponse(
+          id: 'r1',
+          participantId: participant.id,
+          questionId: q1.id,
+          selectedChoiceId: correctChoice.id,
+          isCorrect: true,
+        ),
+      ];
+
+      examService.submitResponses(
+        examId: exam.id,
+        participantId: participant.id,
+        responses: responses,
+      );
+
+      final retrieved = examService.getResponsesForParticipant(exam.id, participant.id);
+      expect(retrieved.length, 1);
+      expect(retrieved.first.isCorrect, isTrue);
+      expect(retrieved.first.selectedChoiceId, correctChoice.id);
+    });
+  });
+
+  group('Flashcard Deck & Study Mode Tests', () {
+    test('Flashcard deck questions are created and integrated into StudyController', () async {
+      final storage = LocalStorageService();
+      final examService = ExamService(storage, seedDefaultExams: false);
+
+      final container = ProviderContainer(
+        overrides: [
+          examServiceProvider.overrideWith((ref) => examService),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      // Create a Flashcard Deck exam with 2 cards
+      final q1 = Question(
+        id: 'q_fc_1',
+        topicId: 'flashcards',
+        subjectId: 'custom',
+        category: 'JavaScript Fundamentals',
+        questionText: 'What is a closure?',
+        questionType: QuestionType.multipleChoice,
+        difficulty: Difficulty.medium,
+        explanation: 'Enclosing lexical environment',
+        reference: '',
+        choices: [
+          QuestionChoice(
+            id: 'c1',
+            questionId: 'q_fc_1',
+            choiceText: 'A function bundled with references to its surrounding state',
+            isCorrect: true,
+            sortOrder: 0,
+          ),
+        ],
+        points: 1,
+      );
+
+      final q2 = Question(
+        id: 'q_fc_2',
+        topicId: 'flashcards',
+        subjectId: 'custom',
+        category: 'JavaScript Fundamentals',
+        questionText: 'What is NaN in JavaScript?',
+        questionType: QuestionType.multipleChoice,
+        difficulty: Difficulty.medium,
+        explanation: 'Not a Number numeric value',
+        reference: '',
+        choices: [
+          QuestionChoice(
+            id: 'c2',
+            questionId: 'q_fc_2',
+            choiceText: 'A special numeric value representing an unrepresentable or undefined value',
+            isCorrect: true,
+            sortOrder: 0,
+          ),
+        ],
+        points: 1,
+      );
+
+      final deckExam = Exam(
+        id: 'deck_js_1',
+        creatorId: 'maker_1',
+        title: 'JS Core Concepts',
+        subject: 'JavaScript Fundamentals',
+        description: 'Flashcards for JS',
+        code: 'JSFC01',
+        status: ExamStatus.published,
+        questions: [q1, q2],
+        createdAt: DateTime.now(),
+      );
+
+      final published = await examService.publishExam(deckExam);
+      expect(published.questions.length, 2);
+
+      // Sync into StudyController
+      final studyNotifier = container.read(studyControllerProvider.notifier);
+      await studyNotifier.syncCreatedExam(published);
+
+      final studyState = container.read(studyControllerProvider);
+      // Verify subject exists
+      expect(
+        studyState.subjects.any((s) => s.name == 'JavaScript Fundamentals'),
+        isTrue,
+      );
+      // Verify questions added to study deck
+      final subject = studyState.subjects.firstWhere((s) => s.name == 'JavaScript Fundamentals');
+      final questions = studyState.questions
+          .where((q) => q.subjectId == subject.id || q.category.toLowerCase() == subject.name.toLowerCase())
+          .toList();
+      expect(questions.length, 2);
+      expect(questions.first.questionText, 'What is a closure?');
+      expect(questions.first.choices.first.choiceText, contains('A function bundled'));
+    });
+
+    test('FlashcardController flips, records mastery, and navigates backwards', () {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final testQuestions = [
+        Question(
+          id: 'q1',
+          topicId: 't1',
+          subjectId: 's1',
+          category: 'Math',
+          questionText: 'Pi value?',
+          questionType: QuestionType.multipleChoice,
+          difficulty: Difficulty.easy,
+          explanation: '',
+          reference: '',
+          choices: [
+            QuestionChoice(
+              id: 'c1',
+              questionId: 'q1',
+              choiceText: '3.14159',
+              isCorrect: true,
+              sortOrder: 0,
+            ),
+          ],
+          points: 1,
+        ),
+        Question(
+          id: 'q2',
+          topicId: 't1',
+          subjectId: 's1',
+          category: 'Math',
+          questionText: 'Euler number?',
+          questionType: QuestionType.multipleChoice,
+          difficulty: Difficulty.easy,
+          explanation: '',
+          reference: '',
+          choices: [
+            QuestionChoice(
+              id: 'c2',
+              questionId: 'q2',
+              choiceText: '2.71828',
+              isCorrect: true,
+              sortOrder: 0,
+            ),
+          ],
+          points: 1,
+        ),
+      ];
+
+      final provider = flashcardControllerProvider(testQuestions);
+      final notifier = container.read(provider.notifier);
+
+      // Initial state
+      expect(container.read(provider).currentIndex, 0);
+      expect(container.read(provider).isFlipped, isFalse);
+
+      // Flip card
+      notifier.flip();
+      expect(container.read(provider).isFlipped, isTrue);
+
+      // Mark Known
+      notifier.markKnown();
+      expect(container.read(provider).currentIndex, 1);
+      expect(container.read(provider).knownCount, 1);
+      expect(container.read(provider).isFlipped, isFalse);
+
+      // Navigate backwards
+      notifier.previousCard();
+      expect(container.read(provider).currentIndex, 0);
+
+      // Advance again to end
+      notifier.markStillLearning();
+      expect(container.read(provider).currentIndex, 1);
+      notifier.markKnown();
+      expect(container.read(provider).isCompleted, isTrue);
+    });
+  });
+
+  group('Subject Sharing & Conflict-Free Code Generation Tests', () {
+    test('generateSubjectCode produces formatted unique code', () {
+      final code1 = CodeGenerator.generateSubjectCode('English');
+      final code2 = CodeGenerator.generateSubjectCode('English');
+      expect(code1, startsWith('SUB-ENGL-'));
+      expect(code2, startsWith('SUB-ENGL-'));
+      expect(code1, isNot(equals(code2))); // Different random tokens
+      expect(code1.length, 15); // 'SUB-' (4) + 'ENGL' (4) + '-' (1) + 6 chars = 15
+    });
+
+    test('Subject bundle export and import assigns unique codes avoiding any conflict', () async {
+      final storageA = LocalStorageService();
+      final serviceA = ExamService(storageA, seedDefaultExams: true);
+
+      // Create 2 exams under 'English Literature'
+      final exam1 = await serviceA.publishExam(
+        Exam(
+          id: 'exam_eng_1',
+          title: 'Grammar Fundamentals',
+          description: 'Grammar practice',
+          subject: 'English',
+          code: 'TEMP01',
+          creatorId: 'teacher_device_a',
+          status: ExamStatus.published,
+          createdAt: DateTime.now(),
+          questions: [
+            Question(
+              id: 'q_eng_1',
+              topicId: 'top_grammar',
+              subjectId: 'subj_eng',
+              questionText: 'Which is a verb?',
+              questionType: QuestionType.multipleChoice,
+              choices: [
+                QuestionChoice(id: 'c1', questionId: 'q_eng_1', choiceText: 'Run', isCorrect: true),
+                QuestionChoice(id: 'c2', questionId: 'q_eng_1', choiceText: 'Blue', isCorrect: false),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final exam2 = await serviceA.publishExam(
+        Exam(
+          id: 'exam_eng_2',
+          title: 'Vocabulary Master',
+          description: 'Vocabulary practice',
+          subject: 'English',
+          code: 'TEMP02',
+          creatorId: 'teacher_device_a',
+          status: ExamStatus.published,
+          createdAt: DateTime.now(),
+          questions: [
+            Question(
+              id: 'q_eng_2',
+              topicId: 'top_vocab',
+              subjectId: 'subj_eng',
+              questionText: 'Synonym of Happy?',
+              questionType: QuestionType.multipleChoice,
+              choices: [
+                QuestionChoice(id: 'c3', questionId: 'q_eng_2', choiceText: 'Joyful', isCorrect: true),
+                QuestionChoice(id: 'c4', questionId: 'q_eng_2', choiceText: 'Sad', isCorrect: false),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final originalCode1 = exam1.code;
+      final originalCode2 = exam2.code;
+      expect(originalCode1, isNot(equals(originalCode2)));
+
+      // Export the subject bundle from Device A
+      final bundle = await serviceA.exportSubjectBundle('English');
+      expect(bundle.code, startsWith('SUB-ENGL-'));
+      expect(bundle.examsCount, 2);
+      expect(bundle.totalQuestions, 2);
+      expect(bundle.bundleJson, contains('Grammar Fundamentals'));
+      expect(bundle.bundleJson, contains('Vocabulary Master'));
+
+      // Now on Device B: separate fresh storage and service
+      final storageB = LocalStorageService();
+      final serviceB = ExamService(storageB, seedDefaultExams: false);
+
+      // Import the bundle onto Device B with user B taking ownership
+      final importedExams = await serviceB.importSubjectBundle(
+        bundle.bundleJson,
+        newCreatorId: 'user_device_b',
+      );
+
+      expect(importedExams.length, 2);
+
+      final importedExam1 = importedExams.firstWhere((e) => e.title == 'Grammar Fundamentals');
+      final importedExam2 = importedExams.firstWhere((e) => e.title == 'Vocabulary Master');
+
+      // 1. Verify recipient owns the exams
+      expect(importedExam1.creatorId, 'user_device_b');
+      expect(importedExam2.creatorId, 'user_device_b');
+
+      // 2. CRITICAL: Verify exam codes inside that subject are UNIQUE and avoid collision
+      expect(importedExam1.code, isNot(equals(originalCode1))); // Different from Device A's code
+      expect(importedExam2.code, isNot(equals(originalCode2))); // Different from Device A's code
+      expect(importedExam1.code, isNot(equals(importedExam2.code))); // Different from each other!
+      expect(importedExam1.code.length, 6);
+      expect(importedExam2.code.length, 6);
+
+      // 3. Verify question and choice IDs are fresh and non-colliding
+      expect(importedExam1.id, isNot(equals(exam1.id)));
+      expect(importedExam1.questions.first.id, isNot(equals('q_eng_1')));
+      expect(importedExam1.questions.first.choices.first.id, isNot(equals('c1')));
+
+      // 4. Verify quizzes can be looked up and joined with their new unique codes on Device B
+      final fetched1 = serviceB.getExamByCode(importedExam1.code);
+      final fetched2 = serviceB.getExamByCode(importedExam2.code);
+      expect(fetched1, isNotNull);
+      expect(fetched2, isNotNull);
+      expect(fetched1!.title, 'Grammar Fundamentals');
+      expect(fetched2!.title, 'Vocabulary Master');
     });
   });
 }

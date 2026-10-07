@@ -1,14 +1,19 @@
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/exam_model.dart';
+import '../models/subject_model.dart';
 import '../models/question_model.dart';
 import '../models/exam_participant_model.dart';
 import '../core/utils/code_generator.dart';
 import 'seed_data_service.dart';
 import 'local_storage_service.dart';
+import 'supabase_exam_service.dart';
 
 class ExamService extends ChangeNotifier {
   final LocalStorageService _storage;
+  final SupabaseExamService? _supabase;
 
   // In-memory registry of active exams and participants
   final Map<String, Exam> _examsByCode = {};
@@ -19,9 +24,21 @@ class ExamService extends ChangeNotifier {
   /// Returns all in-memory exams
   List<Exam> get allExams => _examsById.values.toList();
 
-  ExamService(this._storage) {
-    _initSampleExamFromProposal();
+  ExamService(
+    this._storage, {
+    SupabaseExamService? supabase,
+    bool seedDefaultExams = false,
+  }) : _supabase = supabase {
+    if (seedDefaultExams) {
+      _initDefaultExams();
+    }
     _initExamsFromStorage();
+  }
+
+  /// Manually seeds default demo exams (for testing harnesses)
+  void seedDefaultExamsForTesting() {
+    _initDefaultExams();
+    notifyListeners();
   }
 
   Future<void> _initExamsFromStorage() async {
@@ -33,8 +50,8 @@ class ExamService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Seeds the exact sample exam featured in Section 7 & 8 of Proposal v2
-  void _initSampleExamFromProposal() {
+  /// Seeds initial default exams
+  void _initDefaultExams() {
     final questions = SeedDataService.getInitialQuestions();
     // Choose 5 diverse Science questions (MCQ, True/False, Matching)
     final sampleQuestions = [
@@ -199,7 +216,7 @@ class ExamService extends ChangeNotifier {
     _examsByCode[mathExam2.code] = mathExam2;
     _examsById[mathExam2.id] = mathExam2;
 
-    // Seed mock leaderboard participants from Proposal v2: juanb (9/10), maria_c (9/10), kevin92 (8/10)
+    // Seed mock leaderboard participants: juanb (9/10), maria_c (9/10), kevin92 (8/10)
     final p1 = ExamParticipant(
       id: 'p_1',
       examId: sampleExam.id,
@@ -269,7 +286,7 @@ class ExamService extends ChangeNotifier {
     ];
   }
 
-  /// Publishes a new exam, assigns a 6-character code, and persists it
+  /// Publishes a new exam, assigns a 6-character code, and persists it locally & remotely
   Future<Exam> publishExam(Exam exam) async {
     String code;
     do {
@@ -287,6 +304,16 @@ class ExamService extends ChangeNotifier {
     _responsesByExam[published.id] = [];
 
     await _storage.saveCreatedExam(published);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishExam(published);
+      } catch (e) {
+        debugPrint('[ExamService] Remote publish failed (saved locally): $e');
+      }
+    }
+
     notifyListeners();
     return published;
   }
@@ -306,6 +333,16 @@ class ExamService extends ChangeNotifier {
     _examsByCode[updated.code.toUpperCase()] = updated;
 
     await _storage.saveCreatedExam(updated);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishExam(updated);
+      } catch (e) {
+        debugPrint('[ExamService] Remote status toggle failed (saved locally): $e');
+      }
+    }
+
     notifyListeners();
     return updated;
   }
@@ -325,6 +362,16 @@ class ExamService extends ChangeNotifier {
     _examsByCode[updated.code.toUpperCase()] = updated;
 
     await _storage.saveCreatedExam(updated);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishExam(updated);
+      } catch (e) {
+        debugPrint('[ExamService] Remote timer update failed (saved locally): $e');
+      }
+    }
+
     notifyListeners();
     return updated;
   }
@@ -335,14 +382,251 @@ class ExamService extends ChangeNotifier {
     _examsByCode[updatedExam.code.toUpperCase()] = updatedExam;
 
     await _storage.saveCreatedExam(updatedExam);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishExam(updatedExam);
+      } catch (e) {
+        debugPrint('[ExamService] Remote update failed (saved locally): $e');
+      }
+    }
+
     notifyListeners();
     return updatedExam;
   }
 
-  /// Looks up an exam by its 6-character code (case-insensitive)
+  /// Looks up an exam by its 6-character code from in-memory cache (case-insensitive)
   Exam? getExamByCode(String code) {
     final cleanCode = code.trim().toUpperCase();
     return _examsByCode[cleanCode];
+  }
+
+  /// Looks up an exam by its 6-character code, fetching from Supabase if not found locally
+  Future<Exam?> getOrFetchExamByCode(String code) async {
+    final cleanCode = code.trim().toUpperCase();
+    final local = _examsByCode[cleanCode];
+    if (local != null) return local;
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        final remote = await supabase.fetchExamByCode(cleanCode);
+        if (remote != null) {
+          _examsByCode[cleanCode] = remote;
+          _examsById[remote.id] = remote;
+          await _storage.saveCreatedExam(remote);
+          notifyListeners();
+          return remote;
+        }
+      } catch (e) {
+        debugPrint('[ExamService] Remote fetch by code failed: $e');
+      }
+    }
+    return null;
+  }
+
+  /// Exports all exams belonging to [subjectName] into a bundle with a unique Subject Code
+  Future<SubjectBundleResult> exportSubjectBundle(String subjectName) async {
+    final matchingExams = allExams
+        .where((e) => e.effectiveSubject.toLowerCase() == subjectName.trim().toLowerCase())
+        .toList();
+
+    if (matchingExams.isEmpty) {
+      throw Exception('No exams found under subject "$subjectName"');
+    }
+
+    // Generate a unique, conflict-free subject code (e.g. SUB-ENG-7K2M9P)
+    String uniqueCode;
+    do {
+      uniqueCode = CodeGenerator.generateSubjectCode(subjectName, length: 6);
+    } while (await _storage.loadSubjectBundle(uniqueCode) != null);
+    final totalQuestions = matchingExams.fold(0, (sum, e) => sum + e.questions.length);
+
+    final bundleMap = {
+      'type': 'subject_bundle',
+      'version': 1,
+      'code': uniqueCode,
+      'subject': subjectName,
+      'exported_at': DateTime.now().toIso8601String(),
+      'exams_count': matchingExams.length,
+      'total_questions': totalQuestions,
+      'exams': matchingExams.map((e) => e.toJson()).toList(),
+    };
+
+    final bundleJson = jsonEncode(bundleMap);
+
+    // Save locally to storage
+    await _storage.saveSubjectBundle(uniqueCode, bundleMap);
+
+    // Sync to Supabase if connected
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishSubjectBundle(uniqueCode, subjectName, bundleMap);
+      } catch (e) {
+        debugPrint('[ExamService] Remote publish subject bundle: $e');
+      }
+    }
+
+    return SubjectBundleResult(
+      code: uniqueCode,
+      subject: subjectName,
+      examsCount: matchingExams.length,
+      totalQuestions: totalQuestions,
+      bundleJson: bundleJson,
+    );
+  }
+
+  /// Imports an entire Subject Bundle or Single Exam from a code or raw JSON string.
+  /// Reassigns [newCreatorId] and regenerates IDs/codes where needed to guarantee zero conflicts.
+  Future<List<Exam>> importSubjectBundle(
+    String codeOrJson, {
+    required String newCreatorId,
+  }) async {
+    final trimmed = codeOrJson.trim();
+    Map<String, dynamic>? bundleData;
+
+    // Check if raw JSON was pasted
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        final parsed = jsonDecode(trimmed);
+        if (parsed is Map<String, dynamic>) {
+          if (parsed['type'] == 'subject_bundle' && parsed.containsKey('exams')) {
+            bundleData = parsed;
+          } else if (parsed.containsKey('title') && parsed.containsKey('questions')) {
+            // It's a single exam JSON! Wrap it as a 1-exam bundle
+            final exam = Exam.fromJson(parsed);
+            bundleData = {
+              'type': 'subject_bundle',
+              'subject': exam.effectiveSubject,
+              'code': exam.code,
+              'exams': [parsed],
+            };
+          }
+        }
+      } catch (e) {
+        debugPrint('[ExamService] JSON parse error: $e');
+      }
+    }
+
+    // If not raw JSON, treat as a code (e.g. SUB-ENG-7K2M or 6-char exam code)
+    if (bundleData == null) {
+      final normalizedCode = trimmed.toUpperCase().replaceAll(' ', '');
+      // 1. Try local storage bundle
+      bundleData = await _storage.loadSubjectBundle(normalizedCode);
+
+      // 2. Try Supabase bundle
+      if (bundleData == null && _supabase != null && _supabase!.isAvailable) {
+        bundleData = await _supabase!.fetchSubjectBundle(normalizedCode);
+      }
+
+      // 3. If still not found and code could be a single exam code, try fetching single exam
+      if (bundleData == null) {
+        final singleExam = await getOrFetchExamByCode(normalizedCode);
+        if (singleExam != null) {
+          bundleData = {
+            'type': 'subject_bundle',
+            'subject': singleExam.effectiveSubject,
+            'code': singleExam.code,
+            'exams': [singleExam.toJson()],
+          };
+        }
+      }
+    }
+
+    if (bundleData == null || !bundleData.containsKey('exams')) {
+      throw Exception('Subject code or bundle "$trimmed" not found. Please verify the code.');
+    }
+
+    final examsRaw = bundleData['exams'] as List<dynamic>? ?? [];
+    if (examsRaw.isEmpty) {
+      throw Exception('This subject bundle contains no quizzes.');
+    }
+
+    final subjectName = (bundleData['subject'] as String?)?.trim() ?? 'Imported Subject';
+    final importedExams = <Exam>[];
+
+    // Ensure subject exists in custom subjects
+    final subjectId = 'subj_${subjectName.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}';
+    await _storage.saveCustomSubject(
+      Subject(
+        id: subjectId,
+        name: subjectName,
+        description: 'Imported subject containing ${examsRaw.length} quizzes',
+        icon: 'school',
+        sortOrder: 99,
+      ),
+    );
+
+    for (final rawExam in examsRaw) {
+      final examMap = Map<String, dynamic>.from(rawExam as Map);
+      final originalExam = Exam.fromJson(examMap);
+
+      // Generate a new unique exam ID to avoid conflicts
+      final newExamId = CodeGenerator.generateId('exam');
+
+      // ALWAYS generate a fresh, unique 6-character exam code for each exam in this subject!
+      // This ensures Device B has its own independent quizzes and guarantees zero collision
+      // with Device A's exam code or other existing quizzes.
+      String examCode;
+      do {
+        examCode = CodeGenerator.generateExamCode();
+      } while (_examsByCode.containsKey(examCode) || importedExams.any((e) => e.code == examCode));
+
+      // Re-map questions with unique conflict-free IDs
+      final newQuestions = <Question>[];
+      for (final q in originalExam.questions) {
+        final newQId = CodeGenerator.generateId('q');
+        final newChoices = q.choices.map<QuestionChoice>((c) => c.copyWith(
+          id: CodeGenerator.generateId('c'),
+          questionId: newQId,
+        )).toList();
+
+        final newPairs = q.matchingPairs.map<MatchingPair>((p) => p.copyWith(
+          id: CodeGenerator.generateId('m'),
+          questionId: newQId,
+          leftText: p.leftText,
+          rightText: p.rightText,
+        )).toList();
+
+        newQuestions.add(q.copyWith(
+          id: newQId,
+          subjectId: subjectId,
+          category: subjectName,
+          choices: newChoices,
+          matchingPairs: newPairs,
+        ));
+      }
+
+      final importedExam = originalExam.copyWith(
+        id: newExamId,
+        creatorId: newCreatorId,
+        subject: subjectName,
+        code: examCode,
+        status: ExamStatus.published,
+        questions: newQuestions,
+        createdAt: DateTime.now(),
+      );
+
+      _examsById[importedExam.id] = importedExam;
+      _examsByCode[importedExam.code.toUpperCase()] = importedExam;
+      _participantsByExam[importedExam.id] = [];
+      _responsesByExam[importedExam.id] = [];
+
+      await _storage.saveCreatedExam(importedExam);
+
+      if (_supabase != null && _supabase!.isAvailable) {
+        try {
+          await _supabase!.publishExam(importedExam);
+        } catch (_) {}
+      }
+
+      importedExams.add(importedExam);
+    }
+
+    notifyListeners();
+    return importedExams;
   }
 
   /// Gets an exam by its ID
@@ -377,6 +661,15 @@ class ExamService extends ChangeNotifier {
     );
 
     _participantsByExam.putIfAbsent(exam.id, () => []).add(participant);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      supabase.recordParticipant(participant).catchError((e) {
+        debugPrint('[ExamService] Remote participant registration failed: $e');
+        return false;
+      });
+    }
+
     return participant;
   }
 
@@ -413,7 +706,71 @@ class ExamService extends ChangeNotifier {
     participants[pIndex] = updated;
     _responsesByExam.putIfAbsent(examId, () => []).addAll(responses);
 
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      supabase
+          .submitExamResponses(participant: updated, responses: responses)
+          .catchError((e) {
+        debugPrint('[ExamService] Remote responses submission failed: $e');
+        return false;
+      });
+    }
+
+    notifyListeners();
     return updated;
+  }
+
+  /// Refreshes participants & responses from Supabase for live/remote leaderboard
+  Future<List<ExamParticipant>> syncParticipantsFromRemote(String examId) async {
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        final remoteParticipants = await supabase.fetchParticipants(examId);
+        final remoteResponses = await supabase.fetchResponsesForExam(examId);
+
+        if (remoteParticipants.isNotEmpty) {
+          final existing = _participantsByExam[examId] ?? [];
+          final map = {for (final p in existing) p.id: p};
+          for (final p in remoteParticipants) {
+            map[p.id] = p;
+          }
+          _participantsByExam[examId] = map.values.toList();
+        }
+
+        if (remoteResponses.isNotEmpty) {
+          final existing = _responsesByExam[examId] ?? [];
+          final map = {for (final r in existing) r.id: r};
+          for (final r in remoteResponses) {
+            map[r.id] = r;
+          }
+          _responsesByExam[examId] = map.values.toList();
+        }
+
+        notifyListeners();
+      } catch (e) {
+        debugPrint('[ExamService] Remote participants sync failed: $e');
+      }
+    }
+    return getParticipants(examId);
+  }
+
+  /// Subscribes to Realtime participant submissions
+  RealtimeChannel? subscribeToLiveParticipants(String examId) {
+    final supabase = _supabase;
+    if (supabase == null || !supabase.isAvailable) return null;
+    return supabase.subscribeToParticipants(
+      examId: examId,
+      onUpdate: (updatedParticipant) {
+        final list = _participantsByExam.putIfAbsent(examId, () => []);
+        final idx = list.indexWhere((p) => p.id == updatedParticipant.id);
+        if (idx >= 0) {
+          list[idx] = updatedParticipant;
+        } else {
+          list.add(updatedParticipant);
+        }
+        notifyListeners();
+      },
+    );
   }
 
   /// Returns participants for maker leaderboard
@@ -431,6 +788,12 @@ class ExamService extends ChangeNotifier {
       return b.score.compareTo(a.score);
     });
     return sorted;
+  }
+
+  /// Returns responses for a specific participant in an exam
+  List<ExamResponse> getResponsesForParticipant(String examId, String participantId) {
+    final list = _responsesByExam[examId] ?? [];
+    return list.where((r) => r.participantId == participantId).toList();
   }
 
   /// Returns per-question analytics (hardest questions)
@@ -458,4 +821,20 @@ class ExamService extends ChangeNotifier {
     stats.sort((a, b) => a.accuracy.compareTo(b.accuracy));
     return stats;
   }
+}
+
+class SubjectBundleResult {
+  final String code;
+  final String subject;
+  final int examsCount;
+  final int totalQuestions;
+  final String bundleJson;
+
+  const SubjectBundleResult({
+    required this.code,
+    required this.subject,
+    required this.examsCount,
+    required this.totalQuestions,
+    required this.bundleJson,
+  });
 }

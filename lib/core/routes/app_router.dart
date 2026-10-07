@@ -76,7 +76,7 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'flashcards',
           builder: (context, state) {
-            final questions = state.extra as List<Question>;
+            final questions = (state.extra as List?)?.cast<Question>() ?? <Question>[];
             return FlashcardsScreen(questions: questions);
           },
         ),

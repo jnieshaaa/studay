@@ -210,7 +210,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'Manage your subjects (Filipino, English, Math), publish custom exams, and track results.',
+                        'Manage your subjects, publish custom exams, and track results.',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
@@ -508,7 +508,7 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Explore subject cards (Filipino, English, Math) and their quizzes (Quiz 1, Quiz 2). Creators save their work here.',
+                  'Explore your subject cards and quizzes. Creators save and manage their work here.',
                   style: TextStyle(
                     fontSize: 12.5,
                     color: isDark
@@ -654,7 +654,7 @@ class HomeScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.collections_bookmark_outlined, color: AppColors.secondary),
                   title: const Text('Go to My Library', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('View Subject Cards (Filipino, English, Math) and quizzes'),
+                  subtitle: const Text('View Subject Cards and your quizzes'),
                   trailing: const Icon(Icons.chevron_right),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onTap: () {

@@ -9,6 +9,7 @@ import '../../../controllers/exam_participant_controller.dart';
 import '../../../models/quiz_session_model.dart';
 import '../../../models/exam_model.dart';
 import '../../components/common/gradient_card.dart';
+import 'create_flashcard_sheet.dart';
 
 class StudyHomeScreen extends ConsumerStatefulWidget {
   const StudyHomeScreen({super.key});
@@ -62,6 +63,14 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.style, color: AppColors.secondary),
+            tooltip: 'Create Flashcards',
+            onPressed: () => showCreateFlashcardSheet(
+              context: context,
+              initialSubject: selectedSubjectObj?.name,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.download, color: AppColors.secondary),
             tooltip: 'Import Exam as Study Deck',
@@ -125,6 +134,21 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                         ),
                       );
                     }),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.style, size: 16, color: Colors.white),
+                        label: const Text(
+                          '+ Create Flashcards',
+                          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
+                        ),
+                        backgroundColor: AppColors.secondary,
+                        onPressed: () => showCreateFlashcardSheet(
+                          context: context,
+                          initialSubject: selectedSubjectObj?.name,
+                        ),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: ActionChip(
@@ -203,15 +227,33 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        icon: const Icon(Icons.add, size: 16),
-                        label: const Text('Create Quiz in Exam Maker'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        ),
-                        onPressed: () => context.go('/exam/maker'),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.style, size: 16),
+                            label: const Text('Create Flashcards'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.secondary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                            onPressed: () => showCreateFlashcardSheet(
+                              context: context,
+                              initialSubject: selectedSubjectObj?.name,
+                            ),
+                          ),
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.add, size: 16),
+                            label: const Text('Create Quiz in Exam Maker'),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                            onPressed: () => context.go('/exam/maker'),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -232,19 +274,7 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
 
   void _showImportExamSheet(BuildContext context, WidgetRef ref) async {
     final examService = ref.read(examServiceProvider);
-    final storage = ref.read(localStorageServiceProvider);
-    await storage.init();
-
-    final createdExams = await storage.loadCreatedExams();
-    final demoExam = examService.getExamByCode('4F9K2Q');
-
-    final allExams = <Exam>[];
-    if (demoExam != null) allExams.add(demoExam);
-    for (final e in createdExams) {
-      if (!allExams.any((x) => x.id == e.id)) {
-        allExams.add(e);
-      }
-    }
+    final allExams = examService.allExams;
 
     if (!context.mounted) return;
 
@@ -443,6 +473,15 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                         ),
                       ],
                     ),
+                  ),
+                ),
+                // Add Flashcard to this subject
+                IconButton(
+                  icon: const Icon(Icons.style_outlined, color: AppColors.secondary, size: 21),
+                  tooltip: 'Create Flashcards for $subjectName',
+                  onPressed: () => showCreateFlashcardSheet(
+                    context: context,
+                    initialSubject: subjectName,
                   ),
                 ),
                 // Dropdown arrow toggle button
