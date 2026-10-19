@@ -30,6 +30,7 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _descController;
   late final TextEditingController _durationController;
+  late final TextEditingController _questionLimitController;
   String? _titleError;
   String? _subjectError;
 
@@ -44,6 +45,11 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
     _durationController = TextEditingController(
       text: exam?.durationMinutes != null && exam!.durationMinutes! > 0
           ? '${exam.durationMinutes}'
+          : '',
+    );
+    _questionLimitController = TextEditingController(
+      text: exam?.questionLimit != null && exam!.questionLimit! > 0
+          ? '${exam.questionLimit}'
           : '',
     );
 
@@ -62,6 +68,7 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
     _titleController.dispose();
     _descController.dispose();
     _durationController.dispose();
+    _questionLimitController.dispose();
     super.dispose();
   }
 
@@ -794,6 +801,99 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
+
+                        // Question Bank Sampling / Item Limit
+                        TextField(
+                          controller: _questionLimitController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          decoration: InputDecoration(
+                            labelText: 'Questions Shown in Exam (Random Draw)',
+                            hintText: 'e.g. 20 (from a 100-item bank)',
+                            prefixIcon: const Icon(Icons.shuffle_rounded, size: 20),
+                            suffixText: 'items',
+                            helperText: state.questionLimit != null && state.questionLimit! > 0
+                                ? 'Randomly draws ${state.questionLimit} unique questions with NO duplicates.'
+                                : 'Leave empty to include all questions from the question bank.',
+                          ),
+                          onChanged: (val) {
+                            final trimmed = val.trim();
+                            if (trimmed.isEmpty) {
+                              notifier.setQuestionLimit(null);
+                            } else {
+                              final parsed = int.tryParse(trimmed);
+                              notifier.setQuestionLimit(
+                                parsed != null && parsed > 0 ? parsed : null,
+                              );
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Quick presets chips: All, 10, 20, 25, 50
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            ActionChip(
+                              label: const Text('All Questions'),
+                              avatar: state.questionLimit == null || state.questionLimit! <= 0
+                                  ? const Icon(Icons.check, size: 16)
+                                  : null,
+                              backgroundColor: state.questionLimit == null || state.questionLimit! <= 0
+                                  ? AppColors.primary.withValues(alpha: 0.15)
+                                  : null,
+                              onPressed: () {
+                                _questionLimitController.clear();
+                                notifier.setQuestionLimit(null);
+                              },
+                            ),
+                            ...[10, 20, 25, 50].map((count) {
+                              final isSelected = state.questionLimit == count;
+                              return ActionChip(
+                                label: Text('$count Items'),
+                                avatar: isSelected ? const Icon(Icons.check, size: 16) : null,
+                                backgroundColor: isSelected
+                                    ? AppColors.primary.withValues(alpha: 0.15)
+                                    : null,
+                                onPressed: () {
+                                  _questionLimitController.text = '$count';
+                                  notifier.setQuestionLimit(count);
+                                },
+                              );
+                            }),
+                          ],
+                        ),
+                        if (state.questionLimit != null && state.questionLimit! > 0) ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: AppColors.secondary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.auto_awesome, size: 16, color: AppColors.secondary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Exam will randomly pick ${state.questionLimit} non-repeating questions per attempt${state.questions.isNotEmpty ? ' from your ${state.questions.length} total questions' : ''}.',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.secondary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
                         const Divider(height: 1),
 
                         SwitchListTile(
@@ -956,7 +1056,9 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                '${state.questions.length} Total Questions',
+                                state.hasQuestionLimit
+                                    ? '${state.questionLimit} of ${state.questions.length} Items (Random Draw)'
+                                    : '${state.questions.length} Total Questions',
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,

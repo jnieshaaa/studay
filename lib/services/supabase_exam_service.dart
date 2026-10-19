@@ -19,12 +19,16 @@ class SupabaseExamService {
 
     try {
       // 1. Upsert exam header
+      final descWithLimit = (exam.questionLimit != null && exam.questionLimit! > 0)
+          ? '${exam.cleanDescription}\n<!--limit:${exam.questionLimit}-->'
+          : exam.cleanDescription;
+
       final examMap = {
         'id': exam.id,
         'creator_id': exam.creatorId,
         'title': exam.title,
         'subject': exam.effectiveSubject,
-        'description': exam.description,
+        'description': descWithLimit,
         'code': exam.code.trim().toUpperCase(),
         'status': exam.status.name,
         'question_order': exam.questionOrder.name,

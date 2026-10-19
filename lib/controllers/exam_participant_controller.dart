@@ -77,11 +77,19 @@ class ExamParticipantController extends StateNotifier<ExamParticipantPlayState> 
         ));
 
   static Exam _prepareExam(Exam original) {
+    List<Question> candidatePool = original.questions;
+
+    // If questionLimit is set (e.g. 20 out of 100), randomly sample unique non-repetitive items!
+    if (original.hasQuestionLimit) {
+      final shuffledPool = List<Question>.from(original.questions)..shuffle();
+      candidatePool = shuffledPool.take(original.questionLimit!).toList();
+    }
+
     // Partition questions strictly by sectionOrder so question types are always separate
     final preparedQuestions = <Question>[];
 
     for (final type in original.sectionOrder) {
-      var sectionQuestions = original.questions
+      var sectionQuestions = candidatePool
           .where((q) => q.questionType == type)
           .toList();
 
@@ -94,7 +102,7 @@ class ExamParticipantController extends StateNotifier<ExamParticipantPlayState> 
     }
 
     // Include any questions whose type wasn't in sectionOrder (safeguard)
-    for (final q in original.questions) {
+    for (final q in candidatePool) {
       if (!original.sectionOrder.contains(q.questionType)) {
         preparedQuestions.add(q);
       }

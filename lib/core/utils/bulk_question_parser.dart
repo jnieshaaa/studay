@@ -131,13 +131,40 @@ class BulkQuestionParser {
       }
 
       final startsWithQuestionHeader = questionHeaderRegex.hasMatch(trimmed);
-      final hasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(trimmed);
-      final previousHasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(blocks.last);
+      final isAnswerOrExplanation = _answerRegex.hasMatch(trimmed) || _explanationRegex.hasMatch(trimmed);
+      final startsWithSubsequentChoice = RegExp(
+        r'^\s*[*]?\s*\(?[B-Zb-z](?:[\.\)]|\s*-\s*|\s*:\s*|\))\s*',
+      ).hasMatch(trimmed);
 
-      if (startsWithQuestionHeader || (hasChoiceA && previousHasChoiceA)) {
+      final hasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(trimmed);
+      final prevHasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(blocks.last);
+      final prevHasAnyPrefixedChoice = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[A-Za-z](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(blocks.last);
+
+      if (startsWithQuestionHeader) {
         blocks.add(trimmed);
-      } else {
+      } else if (isAnswerOrExplanation || startsWithSubsequentChoice) {
+        // Unambiguous continuation of previous question
         blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
+      } else if (hasChoiceA) {
+        if (prevHasChoiceA) {
+          blocks.add(trimmed);
+        } else {
+          // Choices for previous question prompt
+          blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
+        }
+      } else if (prevHasAnyPrefixedChoice) {
+        // Previous block was using prefixed choices (A/B/C/D).
+        // If current block has multiple lines without prefixes, treat it as a new question.
+        final lineCount = trimmed.split('\n').where((l) => l.trim().isNotEmpty).length;
+        if (lineCount >= 3) {
+          blocks.add(trimmed);
+        } else {
+          blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
+        }
+      } else {
+        // Plain format (no A/B/C/D prefixes in current or previous block)
+        // Each block separated by empty lines is treated as a separate question.
+        blocks.add(trimmed);
       }
     }
 
@@ -158,6 +185,8 @@ class BulkQuestionParser {
   }
 
   /// Parses a raw text string containing one or more bulk questions.
+  /// Supports both standard prefixed format (A), B), C), D)) and simple plain format
+  /// (question prompt followed directly by choices on separate lines, with questions separated by blank lines).
   static List<ParsedQuestion> parse(
     String rawText, {
     QuestionType targetType = QuestionType.multipleChoice,
@@ -167,185 +196,405 @@ class BulkQuestionParser {
 
     for (final block in blocks) {
       final lines = block.split('\n');
-      final promptLines = <String>[];
-      final choices = <String>[];
-      final choiceLetters = <String>[];
-      int markedCorrectIndex = -1;
-      String? answerSpec;
-      final expLines = <String>[];
-      bool parsingChoices = false;
-      bool parsingExplanation = false;
+      final trimmedLines = lines.map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+      if (trimmedLines.isEmpty) continue;
 
-      for (int i = 0; i < lines.length; i++) {
-        final line = lines[i];
-        final trimmed = line.trim();
-        if (trimmed.isEmpty) {
-          // If we are currently parsing choices, preserve internal blank lines inside code
-          if (parsingChoices && choices.isNotEmpty && choices.last.isNotEmpty) {
-            bool isSeparator = false;
-            for (int j = i + 1; j < lines.length; j++) {
-              final nextTrimmed = lines[j].trim();
-              if (nextTrimmed.isEmpty) continue;
-              if (_choiceRegex.hasMatch(nextTrimmed) ||
-                  _answerRegex.hasMatch(nextTrimmed) ||
-                  _explanationRegex.hasMatch(nextTrimmed)) {
-                isSeparator = true;
+      // Check if this block contains prefixed choices like A), B), C), D) or a., b., etc.
+      final hasPrefixedChoices = trimmedLines.any((l) => _choiceRegex.hasMatch(l));
+
+      if (hasPrefixedChoices) {
+        // Parser for prefixed questions (A), B), C), D)
+        final promptLines = <String>[];
+        final choices = <String>[];
+        final choiceLetters = <String>[];
+        int markedCorrectIndex = -1;
+        String? answerSpec;
+        final expLines = <String>[];
+        bool parsingChoices = false;
+        bool parsingExplanation = false;
+
+        for (int i = 0; i < lines.length; i++) {
+          final line = lines[i];
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) {
+            // If we are currently parsing choices, preserve internal blank lines inside code
+            if (parsingChoices && choices.isNotEmpty && choices.last.isNotEmpty) {
+              bool isSeparator = false;
+              for (int j = i + 1; j < lines.length; j++) {
+                final nextTrimmed = lines[j].trim();
+                if (nextTrimmed.isEmpty) continue;
+                if (_choiceRegex.hasMatch(nextTrimmed) ||
+                    _answerRegex.hasMatch(nextTrimmed) ||
+                    _explanationRegex.hasMatch(nextTrimmed)) {
+                  isSeparator = true;
+                }
+                break;
               }
-              break;
+              if (!isSeparator) {
+                choices[choices.length - 1] = '${choices.last}\n';
+              }
             }
-            if (!isSeparator) {
-              choices[choices.length - 1] = '${choices.last}\n';
+            continue;
+          }
+
+          // Check for explanation line
+          final expMatch = _explanationRegex.firstMatch(trimmed);
+          if (expMatch != null) {
+            parsingExplanation = true;
+            parsingChoices = false;
+            final expText = expMatch.group(1)?.trim() ?? '';
+            if (expText.isNotEmpty) expLines.add(expText);
+            continue;
+          }
+
+          if (parsingExplanation) {
+            expLines.add(line.trimRight());
+            continue;
+          }
+
+          // Check for answer line
+          final ansMatch = _answerRegex.firstMatch(trimmed);
+          if (ansMatch != null) {
+            answerSpec = ansMatch.group(1)?.trim();
+            continue;
+          }
+
+          // Check for choice line
+          final choiceMatch = _choiceRegex.firstMatch(trimmed);
+          if (choiceMatch != null) {
+            parsingChoices = true;
+            final asterisk = choiceMatch.group(1) ?? '';
+            final letter = choiceMatch.group(2)?.toUpperCase() ?? '';
+            String choiceText = choiceMatch.group(3)?.trim() ?? '';
+
+            // Check for inline correct indicators: (correct), [correct], or trailing asterisk
+            bool isCorrectChoice = asterisk.contains('*');
+            if (choiceText.toLowerCase().contains('(correct)')) {
+              isCorrectChoice = true;
+              choiceText = choiceText.replaceAll(RegExp(r'\(correct\)', caseSensitive: false), '').trim();
+            } else if (choiceText.toLowerCase().contains('[correct]')) {
+              isCorrectChoice = true;
+              choiceText = choiceText.replaceAll(RegExp(r'\[correct\]', caseSensitive: false), '').trim();
+            } else if (choiceText.endsWith('*')) {
+              isCorrectChoice = true;
+              choiceText = choiceText.substring(0, choiceText.length - 1).trim();
+            }
+
+            if (isCorrectChoice) {
+              markedCorrectIndex = choices.length;
+            }
+
+            choices.add(choiceText);
+            choiceLetters.add(letter);
+            continue;
+          }
+
+          // If we haven't started choices yet, this line is part of the question prompt
+          if (!parsingChoices) {
+            promptLines.add(line.trimRight());
+          } else {
+            // If choices have started and this is an un-prefixed line, append to last choice
+            if (choices.isNotEmpty) {
+              if (choices.last.isEmpty) {
+                choices[choices.length - 1] = line.trimRight();
+              } else {
+                choices[choices.length - 1] = '${choices.last}\n${line.trimRight()}';
+              }
             }
           }
-          continue;
         }
 
-        // Check for explanation line
-        final expMatch = _explanationRegex.firstMatch(trimmed);
-        if (expMatch != null) {
-          parsingExplanation = true;
-          parsingChoices = false;
-          final expText = expMatch.group(1)?.trim() ?? '';
-          if (expText.isNotEmpty) expLines.add(expText);
-          continue;
-        }
-
-        if (parsingExplanation) {
-          expLines.add(line.trimRight());
-          continue;
-        }
-
-        // Check for answer line
-        final ansMatch = _answerRegex.firstMatch(trimmed);
-        if (ansMatch != null) {
-          answerSpec = ansMatch.group(1)?.trim();
-          continue;
-        }
-
-        // Check for choice line
-        final choiceMatch = _choiceRegex.firstMatch(trimmed);
-        if (choiceMatch != null) {
-          parsingChoices = true;
-          final asterisk = choiceMatch.group(1) ?? '';
-          final letter = choiceMatch.group(2)?.toUpperCase() ?? '';
-          String choiceText = choiceMatch.group(3)?.trim() ?? '';
-
-          // Check for inline correct indicators: (correct), [correct], or trailing asterisk
-          bool isCorrectChoice = asterisk.contains('*');
-          if (choiceText.toLowerCase().contains('(correct)')) {
-            isCorrectChoice = true;
-            choiceText = choiceText.replaceAll(RegExp(r'\(correct\)', caseSensitive: false), '').trim();
-          } else if (choiceText.toLowerCase().contains('[correct]')) {
-            isCorrectChoice = true;
-            choiceText = choiceText.replaceAll(RegExp(r'\[correct\]', caseSensitive: false), '').trim();
-          } else if (choiceText.endsWith('*')) {
-            isCorrectChoice = true;
-            choiceText = choiceText.substring(0, choiceText.length - 1).trim();
+        // Check for inline (correct) markers in multi-line choices
+        for (int cIdx = 0; cIdx < choices.length; cIdx++) {
+          var c = choices[cIdx];
+          if (c.toLowerCase().contains('(correct)')) {
+            markedCorrectIndex = cIdx;
+            c = c.replaceAll(RegExp(r'\(correct\)', caseSensitive: false), '').trim();
+          } else if (c.toLowerCase().contains('[correct]')) {
+            markedCorrectIndex = cIdx;
+            c = c.replaceAll(RegExp(r'\[correct\]', caseSensitive: false), '').trim();
+          } else if (c.endsWith('*')) {
+            markedCorrectIndex = cIdx;
+            c = c.substring(0, c.length - 1).trim();
           }
+          choices[cIdx] = c.trim();
+        }
+
+        if (promptLines.isEmpty && choices.isEmpty) continue;
+
+        final rawPrompt = promptLines.join('\n');
+        final cleanedPrompt = cleanPrompt(rawPrompt);
+
+        if (cleanedPrompt.isEmpty && choices.isEmpty) continue;
+
+        // Determine correct choice index
+        int finalCorrectIndex = 0;
+        if (markedCorrectIndex >= 0 && markedCorrectIndex < choices.length) {
+          finalCorrectIndex = markedCorrectIndex;
+        } else if (answerSpec != null && answerSpec.isNotEmpty) {
+          // Try finding matching choice letter (e.g. "C", "C)", "Answer: C")
+          final letterMatch = RegExp(r'^([A-Za-z])\b').firstMatch(answerSpec);
+          final targetLetter = letterMatch != null
+              ? letterMatch.group(1)!.toUpperCase()
+              : answerSpec.trim().toUpperCase();
+
+          final idxByLetter = choiceLetters.indexOf(targetLetter);
+          if (idxByLetter >= 0) {
+            finalCorrectIndex = idxByLetter;
+          } else {
+            final num = int.tryParse(answerSpec.trim());
+            if (num != null && num >= 1 && num <= choices.length) {
+              finalCorrectIndex = num - 1;
+            } else {
+              // Try matching text directly
+              final idxByText = choices.indexWhere(
+                (c) => c.toLowerCase() == answerSpec!.toLowerCase().trim(),
+              );
+              if (idxByText >= 0) {
+                finalCorrectIndex = idxByText;
+              }
+            }
+          }
+        }
+
+        List<String> effectiveChoices = List<String>.from(choices);
+        if (effectiveChoices.isEmpty) {
+          if (targetType == QuestionType.trueFalse) {
+            effectiveChoices = ['True', 'False'];
+          } else {
+            effectiveChoices = ['Option A', 'Option B', 'Option C', 'Option D'];
+          }
+        }
+
+        QuestionType effectiveType = targetType;
+        if (effectiveChoices.length == 2 &&
+            effectiveChoices.any((c) => c.toLowerCase() == 'true') &&
+            effectiveChoices.any((c) => c.toLowerCase() == 'false')) {
+          effectiveType = QuestionType.trueFalse;
+        }
+
+        results.add(
+          ParsedQuestion(
+            questionText: cleanedPrompt.isNotEmpty ? cleanedPrompt : 'Untitled Question',
+            choices: effectiveChoices,
+            correctChoiceIndex: (finalCorrectIndex >= 0 && finalCorrectIndex < effectiveChoices.length)
+                ? finalCorrectIndex
+                : 0,
+            explanation: expLines.join('\n').trim(),
+            questionType: effectiveType,
+            points: 1,
+          ),
+        );
+      } else {
+        // PLAIN FORMAT: No A), B), C), D) prefixes. Simple and clean creator format.
+        final contentLines = <String>[];
+        final expLines = <String>[];
+        String? answerSpec;
+        bool parsingExplanation = false;
+
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) continue;
+
+          final expMatch = _explanationRegex.firstMatch(trimmed);
+          if (expMatch != null) {
+            parsingExplanation = true;
+            final expText = expMatch.group(1)?.trim() ?? '';
+            if (expText.isNotEmpty) expLines.add(expText);
+            continue;
+          }
+
+          if (parsingExplanation) {
+            expLines.add(line.trimRight());
+            continue;
+          }
+
+          final ansMatch = _answerRegex.firstMatch(trimmed);
+          if (ansMatch != null) {
+            answerSpec = ansMatch.group(1)?.trim();
+            continue;
+          }
+
+          contentLines.add(line.trimRight());
+        }
+
+        if (contentLines.isEmpty) continue;
+
+        String rawPrompt = '';
+        List<String> rawChoices = [];
+
+        if (contentLines.length == 1) {
+          rawPrompt = contentLines.first;
+          rawChoices = [];
+        } else if (contentLines.length == 2 &&
+            (targetType == QuestionType.trueFalse ||
+                contentLines[1].trim().toLowerCase() == 'true' ||
+                contentLines[1].trim().toLowerCase() == 'false')) {
+          rawPrompt = contentLines[0];
+          rawChoices = [contentLines[1]];
+        } else {
+          // Identify split point between prompt lines and choice lines
+          int splitIndex = -1;
+
+          // Check if lines end with bullets or numbered choices (e.g. "- choice", "• choice", "1) choice", "1. choice")
+          final bulletRegex = RegExp(r'^(?:[-*•]|\(?\d+[\.\)])\s+');
+          for (int i = 1; i < contentLines.length; i++) {
+            if (bulletRegex.hasMatch(contentLines[i].trim())) {
+              bool allBullets = true;
+              for (int j = i; j < contentLines.length; j++) {
+                if (!bulletRegex.hasMatch(contentLines[j].trim())) {
+                  allBullets = false;
+                  break;
+                }
+              }
+              if (allBullets) {
+                splitIndex = i;
+                break;
+              }
+            }
+          }
+
+          if (splitIndex < 0) {
+            // Find the last line among prompt candidates (leaving at least 2 choices at bottom)
+            // that ends with '?'
+            int lastPromptQuestionMark = -1;
+            int lastPromptColon = -1;
+            final maxPromptIdx = contentLines.length - 3; // leaves at least 2 choices
+
+            for (int i = 0; i <= maxPromptIdx; i++) {
+              final line = contentLines[i].trim();
+              if (line.endsWith('?')) {
+                lastPromptQuestionMark = i;
+              } else if (line.endsWith(':')) {
+                lastPromptColon = i;
+              }
+            }
+
+            if (lastPromptQuestionMark >= 0) {
+              splitIndex = lastPromptQuestionMark + 1;
+            } else if (lastPromptColon >= 0) {
+              splitIndex = lastPromptColon + 1;
+            } else {
+              // No question mark or colon found in prompt candidates
+              if (targetType == QuestionType.trueFalse) {
+                if (contentLines.length >= 3 &&
+                    contentLines[contentLines.length - 2].trim().toLowerCase() == 'true' &&
+                    contentLines[contentLines.length - 1].trim().toLowerCase() == 'false') {
+                  splitIndex = contentLines.length - 2;
+                } else {
+                  splitIndex = 1;
+                }
+              } else if (contentLines.length <= 5) {
+                // 2 to 5 lines: line 0 is prompt, remaining lines are choices
+                splitIndex = 1;
+              } else {
+                // More than 5 lines: take the last 4 lines as standard MCQ choices
+                splitIndex = contentLines.length - 4;
+              }
+            }
+          }
+
+          rawPrompt = contentLines.sublist(0, splitIndex).join('\n');
+          rawChoices = contentLines.sublist(splitIndex);
+        }
+
+        // Clean choices and look for inline correct indicators
+        int markedCorrectIndex = -1;
+        final choices = <String>[];
+
+        for (int cIdx = 0; cIdx < rawChoices.length; cIdx++) {
+          var c = rawChoices[cIdx].trim();
+          bool isCorrectChoice = false;
+
+          // Check for asterisk marker: *choice or choice*
+          if (c.startsWith('*')) {
+            isCorrectChoice = true;
+            c = c.substring(1).trim();
+          }
+          if (c.endsWith('*')) {
+            isCorrectChoice = true;
+            c = c.substring(0, c.length - 1).trim();
+          }
+
+          // Check for (correct) or [correct]
+          if (c.toLowerCase().contains('(correct)')) {
+            isCorrectChoice = true;
+            c = c.replaceAll(RegExp(r'\(correct\)', caseSensitive: false), '').trim();
+          } else if (c.toLowerCase().contains('[correct]')) {
+            isCorrectChoice = true;
+            c = c.replaceAll(RegExp(r'\[correct\]', caseSensitive: false), '').trim();
+          }
+
+          // Strip any leading bullet markers: "- ", "• ", "1) ", "1. "
+          c = c.replaceFirst(RegExp(r'^(?:[-*•]|\(?\d+[\.\)])\s+'), '').trim();
 
           if (isCorrectChoice) {
-            markedCorrectIndex = choices.length;
+            markedCorrectIndex = cIdx;
           }
 
-          choices.add(choiceText);
-          choiceLetters.add(letter);
-          continue;
+          choices.add(c);
         }
 
-        // If we haven't started choices yet, this line is part of the question prompt
-        if (!parsingChoices) {
-          promptLines.add(line.trimRight());
-        } else {
-          // If choices have started and this is an un-prefixed line, append to last choice
-          if (choices.isNotEmpty) {
-            if (choices.last.isEmpty) {
-              choices[choices.length - 1] = line.trimRight();
+        // Determine correct choice index
+        int finalCorrectIndex = 0;
+        if (markedCorrectIndex >= 0 && markedCorrectIndex < choices.length) {
+          finalCorrectIndex = markedCorrectIndex;
+        } else if (answerSpec != null && answerSpec.isNotEmpty) {
+          final trimmedAnswer = answerSpec.trim();
+          final letterMatch = RegExp(r'^([A-Za-z])\b').firstMatch(trimmedAnswer);
+          if (letterMatch != null) {
+            final letter = letterMatch.group(1)!.toUpperCase();
+            final letterIdx = letter.codeUnitAt(0) - 65; // A -> 0, B -> 1, C -> 2, D -> 3
+            if (letterIdx >= 0 && letterIdx < choices.length) {
+              finalCorrectIndex = letterIdx;
+            }
+          }
+          if (finalCorrectIndex == 0 && markedCorrectIndex < 0) {
+            final num = int.tryParse(trimmedAnswer);
+            if (num != null && num >= 1 && num <= choices.length) {
+              finalCorrectIndex = num - 1;
             } else {
-              choices[choices.length - 1] = '${choices.last}\n${line.trimRight()}';
+              final idxByText = choices.indexWhere(
+                (c) => c.toLowerCase() == trimmedAnswer.toLowerCase(),
+              );
+              if (idxByText >= 0) {
+                finalCorrectIndex = idxByText;
+              }
             }
           }
         }
-      }
 
-      // Check for inline (correct) markers in multi-line choices
-      for (int cIdx = 0; cIdx < choices.length; cIdx++) {
-        var c = choices[cIdx];
-        if (c.toLowerCase().contains('(correct)')) {
-          markedCorrectIndex = cIdx;
-          c = c.replaceAll(RegExp(r'\(correct\)', caseSensitive: false), '').trim();
-        } else if (c.toLowerCase().contains('[correct]')) {
-          markedCorrectIndex = cIdx;
-          c = c.replaceAll(RegExp(r'\[correct\]', caseSensitive: false), '').trim();
-        } else if (c.endsWith('*')) {
-          markedCorrectIndex = cIdx;
-          c = c.substring(0, c.length - 1).trim();
-        }
-        choices[cIdx] = c.trim();
-      }
-
-      if (promptLines.isEmpty && choices.isEmpty) continue;
-
-      final rawPrompt = promptLines.join('\n');
-      final cleanedPrompt = cleanPrompt(rawPrompt);
-
-      if (cleanedPrompt.isEmpty && choices.isEmpty) continue;
-
-      // Determine correct choice index
-      int finalCorrectIndex = 0;
-      if (markedCorrectIndex >= 0 && markedCorrectIndex < choices.length) {
-        finalCorrectIndex = markedCorrectIndex;
-      } else if (answerSpec != null && answerSpec.isNotEmpty) {
-        // Try finding matching choice letter (e.g. "C", "C)", "Answer: C")
-        final letterMatch = RegExp(r'^([A-Za-z])\b').firstMatch(answerSpec);
-        final targetLetter = letterMatch != null
-            ? letterMatch.group(1)!.toUpperCase()
-            : answerSpec.trim().toUpperCase();
-
-        final idxByLetter = choiceLetters.indexOf(targetLetter);
-        if (idxByLetter >= 0) {
-          finalCorrectIndex = idxByLetter;
-        } else {
-          // Try matching text directly
-          final idxByText = choices.indexWhere(
-            (c) => c.toLowerCase() == answerSpec!.toLowerCase().trim(),
-          );
-          if (idxByText >= 0) {
-            finalCorrectIndex = idxByText;
+        List<String> effectiveChoices = List<String>.from(choices);
+        if (effectiveChoices.isEmpty) {
+          if (targetType == QuestionType.trueFalse) {
+            effectiveChoices = ['True', 'False'];
+          } else {
+            effectiveChoices = ['Option A', 'Option B', 'Option C', 'Option D'];
           }
         }
-      }
 
-      // If user provided a question with 0 choices, provide fallback default choices
-      List<String> effectiveChoices = List<String>.from(choices);
-      if (effectiveChoices.isEmpty) {
-        if (targetType == QuestionType.trueFalse) {
-          effectiveChoices = ['True', 'False'];
-        } else {
-          effectiveChoices = ['Option A', 'Option B', 'Option C', 'Option D'];
+        QuestionType effectiveType = targetType;
+        if (effectiveChoices.length == 2 &&
+            effectiveChoices.any((c) => c.toLowerCase() == 'true') &&
+            effectiveChoices.any((c) => c.toLowerCase() == 'false')) {
+          effectiveType = QuestionType.trueFalse;
         }
-      }
 
-      // Determine question type:
-      // If targetType is trueFalse, or choices are exactly True and False:
-      QuestionType effectiveType = targetType;
-      if (effectiveChoices.length == 2 &&
-          effectiveChoices.any((c) => c.toLowerCase() == 'true') &&
-          effectiveChoices.any((c) => c.toLowerCase() == 'false')) {
-        effectiveType = QuestionType.trueFalse;
-      }
+        final cleanedPrompt = cleanPrompt(rawPrompt);
 
-      results.add(
-        ParsedQuestion(
-          questionText: cleanedPrompt.isNotEmpty ? cleanedPrompt : 'Untitled Question',
-          choices: effectiveChoices,
-          correctChoiceIndex: (finalCorrectIndex >= 0 && finalCorrectIndex < effectiveChoices.length)
-              ? finalCorrectIndex
-              : 0,
-          explanation: expLines.join('\n').trim(),
-          questionType: effectiveType,
-          points: 1,
-        ),
-      );
+        results.add(
+          ParsedQuestion(
+            questionText: cleanedPrompt.isNotEmpty ? cleanedPrompt : 'Untitled Question',
+            choices: effectiveChoices,
+            correctChoiceIndex: (finalCorrectIndex >= 0 && finalCorrectIndex < effectiveChoices.length)
+                ? finalCorrectIndex
+                : 0,
+            explanation: expLines.join('\n').trim(),
+            questionType: effectiveType,
+            points: 1,
+          ),
+        );
+      }
     }
 
     return results;

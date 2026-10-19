@@ -89,6 +89,51 @@ class FlashcardsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Flashcards Focus', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.shuffle_rounded, size: 20),
+            tooltip: 'Shuffle Cards',
+            onPressed: () {
+              controller.shuffleDeck();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Shuffled flashcard deck randomly!'),
+                  duration: Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+          ),
+          if (questions.length > 10)
+            PopupMenuButton<int>(
+              icon: const Icon(Icons.tune_rounded, size: 20),
+              tooltip: 'Sample Size (Random Draw)',
+              onSelected: (limit) {
+                if (limit == 0) {
+                  ref.invalidate(flashcardControllerProvider(questions));
+                } else {
+                  controller.sampleDeck(limit);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Practicing $limit random cards without repetition!'),
+                      duration: const Duration(seconds: 1),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (ctx) => [
+                const PopupMenuItem(
+                  value: 0,
+                  child: Text('All Cards'),
+                ),
+                ...[10, 20, 25, 50].where((n) => n < questions.length).map(
+                  (n) => PopupMenuItem(
+                    value: n,
+                    child: Text('Practice $n Random Cards'),
+                  ),
+                ),
+              ],
+            ),
           if (state.currentIndex > 0)
             IconButton(
               icon: const Icon(Icons.arrow_back_ios_new, size: 18),

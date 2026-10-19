@@ -445,11 +445,32 @@ class StudyController extends StateNotifier<StudyState> {
         ? exam.durationMinutes! * 60
         : 0;
 
+    List<Question> candidatePool = exam.questions;
+    if (exam.hasQuestionLimit) {
+      final shuffledPool = List<Question>.from(exam.questions)..shuffle();
+      candidatePool = shuffledPool.take(exam.questionLimit!).toList();
+    }
+
+    // Sort sampled candidate questions by sectionOrder
+    final preparedQuestions = <Question>[];
+    for (final type in exam.sectionOrder) {
+      final sectionQuestions = candidatePool.where((q) => q.questionType == type).toList();
+      if (exam.questionOrder == QuestionOrder.shuffled) {
+        sectionQuestions.shuffle();
+      }
+      preparedQuestions.addAll(sectionQuestions);
+    }
+    for (final q in candidatePool) {
+      if (!exam.sectionOrder.contains(q.questionType)) {
+        preparedQuestions.add(q);
+      }
+    }
+
     return QuizSession(
       id: 'quiz_exam_${exam.id}_${DateTime.now().millisecondsSinceEpoch}',
       mode: StudyMode.practice,
       subjectId: 'subj_${exam.effectiveSubject.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_')}',
-      questions: exam.orderedQuestions,
+      questions: preparedQuestions,
       timeLimitSeconds: timeLimit,
       startedAt: DateTime.now(),
     );

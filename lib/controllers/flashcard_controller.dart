@@ -105,6 +105,31 @@ class FlashcardController extends StateNotifier<FlashcardState> {
       isCompleted: false,
     );
   }
+
+  void shuffleDeck() {
+    final shuffled = List<Question>.from(state.deck)..shuffle();
+    state = state.copyWith(
+      deck: shuffled,
+      currentIndex: 0,
+      isFlipped: false,
+      knownCount: 0,
+      learningCount: 0,
+      isCompleted: false,
+    );
+  }
+
+  void sampleDeck(int count) {
+    if (count <= 0 || count >= state.deck.length) return;
+    final sampled = (List<Question>.from(state.deck)..shuffle()).take(count).toList();
+    state = state.copyWith(
+      deck: sampled,
+      currentIndex: 0,
+      isFlipped: false,
+      knownCount: 0,
+      learningCount: 0,
+      isCompleted: false,
+    );
+  }
 }
 
 final flashcardControllerProvider = StateNotifierProvider.autoDispose

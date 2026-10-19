@@ -41,43 +41,34 @@ class BulkImportQuestionsSheet extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<BulkImportQuestionsSheet> createState() => _BulkImportQuestionsSheetState();
+  ConsumerState<BulkImportQuestionsSheet> createState() =>
+      _BulkImportQuestionsSheetState();
 }
 
-class _BulkImportQuestionsSheetState extends ConsumerState<BulkImportQuestionsSheet> {
+class _BulkImportQuestionsSheetState
+    extends ConsumerState<BulkImportQuestionsSheet> {
   late final TextEditingController _textController;
   late QuestionType _selectedType;
   bool _showPreview = false;
 
-  static const String _sampleText = '''1. Which keyword declares a block-scoped variable that cannot be reassigned?
-A) var
-B) let
-C) const
-D) static
+  static const String _sampleText =
+      '''Which keyword declares a block-scoped variable that cannot be reassigned?
+var
+let
+const
+static
 
-2. Which of the following is the correct syntax for a single-line comment in JavaScript?
-A) <!-- comment -->
-B) # comment
-C) // comment
-D) /* comment */
+Which of the following is the correct syntax for a single-line comment in JavaScript?
+<!-- comment -->
+# comment
+// comment
+/* comment */
 
-3. Which HTML tag and attribute combination correctly links an external JavaScript file called main.js?
-A) <script href="main.js"></script>
-B) <script src="main.js"></script>
-C) <javascript link="main.js"></javascript>
-D) <link rel="script" href="main.js">
-
-4. Which of the following represents a valid JSON string?
-A) "{ 'name': 'John', 'age': 30 }"
-B) '{ "name": "John", "age": 30 }'
-C) '{ name: "John", age: 30 }'
-D) '{ "name": "John", "age": 30, }'
-
-5. How do you access the first element of an array named colors?
-A) colors[0]
-B) colors[1]
-C) colors.first()
-D) colors(0)''';
+How do you access the first element of an array named colors?
+colors[0]
+colors[1]
+colors.first()
+colors(0)''';
 
   @override
   void initState() {
@@ -187,7 +178,11 @@ D) colors(0)''';
                     color: AppColors.secondary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.playlist_add, color: AppColors.secondary, size: 22),
+                  child: const Icon(
+                    Icons.playlist_add,
+                    color: AppColors.secondary,
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -198,13 +193,18 @@ D) colors(0)''';
                         widget.partNumber != null
                             ? 'Bulk Import Questions (Part ${widget.partNumber})'
                             : 'Bulk Import Questions',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                       Text(
                         'Paste multiple questions at once to save time.',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                          color: isDark
+                              ? AppColors.textSecondaryDark
+                              : AppColors.textSecondaryLight,
                         ),
                       ),
                     ],
@@ -229,19 +229,29 @@ D) colors(0)''';
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
-                    label: const Text('Multiple Choice (MCQ)', style: TextStyle(fontSize: 12)),
+                    label: const Text(
+                      'Multiple Choice (MCQ)',
+                      style: TextStyle(fontSize: 12),
+                    ),
                     selected: _selectedType == QuestionType.multipleChoice,
                     onSelected: (val) {
-                      if (val) setState(() => _selectedType = QuestionType.multipleChoice);
+                      if (val)
+                        setState(
+                          () => _selectedType = QuestionType.multipleChoice,
+                        );
                     },
                     selectedColor: AppColors.secondary.withValues(alpha: 0.2),
                   ),
                   const SizedBox(width: 8),
                   ChoiceChip(
-                    label: const Text('True / False', style: TextStyle(fontSize: 12)),
+                    label: const Text(
+                      'True / False',
+                      style: TextStyle(fontSize: 12),
+                    ),
                     selected: _selectedType == QuestionType.trueFalse,
                     onSelected: (val) {
-                      if (val) setState(() => _selectedType = QuestionType.trueFalse);
+                      if (val)
+                        setState(() => _selectedType = QuestionType.trueFalse);
                     },
                     selectedColor: AppColors.secondary.withValues(alpha: 0.2),
                   ),
@@ -259,7 +269,9 @@ D) colors(0)''';
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                    color: isDark
+                        ? AppColors.textSecondaryDark
+                        : AppColors.textSecondaryLight,
                   ),
                 ),
                 Row(
@@ -267,7 +279,10 @@ D) colors(0)''';
                     TextButton.icon(
                       onPressed: _loadSample,
                       icon: const Icon(Icons.format_quote, size: 15),
-                      label: const Text('Load Sample', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        'Load Sample',
+                        style: TextStyle(fontSize: 12),
+                      ),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         foregroundColor: AppColors.secondary,
@@ -277,7 +292,10 @@ D) colors(0)''';
                       TextButton.icon(
                         onPressed: _clearText,
                         icon: const Icon(Icons.clear, size: 15),
-                        label: const Text('Clear', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          'Clear',
+                          style: TextStyle(fontSize: 12),
+                        ),
                         style: TextButton.styleFrom(
                           visualDensity: VisualDensity.compact,
                           foregroundColor: AppColors.error,
@@ -294,27 +312,41 @@ D) colors(0)''';
               controller: _textController,
               maxLines: 10,
               minLines: 7,
-              style: const TextStyle(fontSize: 13, fontFamily: 'monospace', height: 1.4),
+              style: const TextStyle(
+                fontSize: 13,
+                fontFamily: 'monospace',
+                height: 1.4,
+              ),
               decoration: InputDecoration(
-                hintText: "1. Which keyword declares a block-scoped variable?\nA) var\nB) let\nC) const\nD) static\n\n2. Next question prompt?\nA) Option A\nB) Option B\nC) Option C\nD) Option D",
+                hintText:
+                    "Which keyword declares a block-scoped variable?\nvar\nlet\nconst\nstatic\n\nNext question prompt?\nOption 1\nOption 2\nOption 3\nOption 4",
                 hintStyle: TextStyle(
                   color: isDark ? Colors.white30 : Colors.black26,
                   fontSize: 12,
                   fontFamily: 'monospace',
                 ),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: isDark ? const Color(0xFF2E2E3E) : const Color(0xFFD6D6E2),
+                    color: isDark
+                        ? const Color(0xFF2E2E3E)
+                        : const Color(0xFFD6D6E2),
                   ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.secondary, width: 2),
+                  borderSide: const BorderSide(
+                    color: AppColors.secondary,
+                    width: 2,
+                  ),
                 ),
                 filled: true,
-                fillColor: isDark ? const Color(0xFF0F0F18) : const Color(0xFFFAFAFE),
+                fillColor: isDark
+                    ? const Color(0xFF0F0F18)
+                    : const Color(0xFFFAFAFE),
                 contentPadding: const EdgeInsets.all(14),
               ),
               onChanged: (_) => setState(() {}),
@@ -327,7 +359,9 @@ D) colors(0)''';
               decoration: BoxDecoration(
                 color: parsed.isNotEmpty
                     ? AppColors.success.withValues(alpha: 0.12)
-                    : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04)),
+                    : (isDark
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.04)),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
                   color: parsed.isNotEmpty
@@ -338,8 +372,12 @@ D) colors(0)''';
               child: Row(
                 children: [
                   Icon(
-                    parsed.isNotEmpty ? Icons.check_circle_outline : Icons.info_outline,
-                    color: parsed.isNotEmpty ? AppColors.success : (isDark ? Colors.white54 : Colors.black45),
+                    parsed.isNotEmpty
+                        ? Icons.check_circle_outline
+                        : Icons.info_outline,
+                    color: parsed.isNotEmpty
+                        ? AppColors.success
+                        : (isDark ? Colors.white54 : Colors.black45),
                     size: 18,
                   ),
                   const SizedBox(width: 8),
@@ -347,26 +385,36 @@ D) colors(0)''';
                     child: Text(
                       parsed.isNotEmpty
                           ? '✓ ${parsed.length} questions recognized and ready to import'
-                          : 'Questions should be separated by a blank line with options (A, B, C, D).',
+                          : 'Separate questions with an empty line. Options can be plain lines or with A, B, C, D.',
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: parsed.isNotEmpty ? FontWeight.w700 : FontWeight.w500,
+                        fontWeight: parsed.isNotEmpty
+                            ? FontWeight.w700
+                            : FontWeight.w500,
                         color: parsed.isNotEmpty
-                            ? (isDark ? Colors.greenAccent : const Color(0xFF1E7E34))
+                            ? (isDark
+                                  ? Colors.greenAccent
+                                  : const Color(0xFF1E7E34))
                             : (isDark ? Colors.white70 : Colors.black87),
                       ),
                     ),
                   ),
                   if (parsed.isNotEmpty)
                     TextButton(
-                      onPressed: () => setState(() => _showPreview = !_showPreview),
+                      onPressed: () =>
+                          setState(() => _showPreview = !_showPreview),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                       ),
                       child: Text(
-                        _showPreview ? 'Hide Preview' : 'Review (${parsed.length})',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        _showPreview
+                            ? 'Hide Preview'
+                            : 'Review (${parsed.length})',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                 ],
@@ -379,9 +427,13 @@ D) colors(0)''';
               Container(
                 constraints: const BoxConstraints(maxHeight: 180),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF12121D) : const Color(0xFFF3F3FA),
+                  color: isDark
+                      ? const Color(0xFF12121D)
+                      : const Color(0xFFF3F3FA),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+                  border: Border.all(
+                    color: isDark ? Colors.white12 : Colors.black12,
+                  ),
                 ),
                 child: ListView.separated(
                   shrinkWrap: true,
@@ -397,7 +449,10 @@ D) colors(0)''';
                           '${idx + 1}. ${item.questionText}',
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Wrap(
@@ -405,14 +460,24 @@ D) colors(0)''';
                           runSpacing: 4,
                           children: item.choices.asMap().entries.map((c) {
                             final letter = String.fromCharCode(65 + c.key);
-                            final isDefaultCorrect = c.key == item.correctChoiceIndex;
+                            final isDefaultCorrect =
+                                c.key == item.correctChoiceIndex;
                             return Container(
                               constraints: const BoxConstraints(maxWidth: 160),
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: isDefaultCorrect
-                                    ? AppColors.secondary.withValues(alpha: 0.15)
-                                    : (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+                                    ? AppColors.secondary.withValues(
+                                        alpha: 0.15,
+                                      )
+                                    : (isDark
+                                          ? Colors.white10
+                                          : Colors.black.withValues(
+                                              alpha: 0.05,
+                                            )),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
@@ -421,8 +486,12 @@ D) colors(0)''';
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight: isDefaultCorrect ? FontWeight.w700 : FontWeight.w500,
-                                  color: isDefaultCorrect ? AppColors.secondary : null,
+                                  fontWeight: isDefaultCorrect
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: isDefaultCorrect
+                                      ? AppColors.secondary
+                                      : null,
                                 ),
                               ),
                             );
@@ -441,20 +510,28 @@ D) colors(0)''';
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1B1B26) : const Color(0xFFF7F7FD),
+                color: isDark
+                    ? const Color(0xFF1B1B26)
+                    : const Color(0xFFF7F7FD),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.edit_note, size: 16, color: AppColors.secondary),
+                  const Icon(
+                    Icons.edit_note,
+                    size: 16,
+                    color: AppColors.secondary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Default answer is choice A. You can tap on any question in your exam builder after importing to set the correct answer and add an explanation.',
+                      'Default answer is the first option (Choice A). You can tap on any question in your exam builder after importing to set the correct answer and add an explanation.',
                       style: TextStyle(
                         fontSize: 11.5,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                        color: isDark
+                            ? AppColors.textSecondaryDark
+                            : AppColors.textSecondaryLight,
                       ),
                     ),
                   ),
@@ -471,7 +548,9 @@ D) colors(0)''';
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                     child: const Text('Cancel'),
                   ),
@@ -480,7 +559,9 @@ D) colors(0)''';
                 Expanded(
                   flex: 2,
                   child: ElevatedButton.icon(
-                    onPressed: parsed.isNotEmpty ? () => _importQuestions(parsed) : null,
+                    onPressed: parsed.isNotEmpty
+                        ? () => _importQuestions(parsed)
+                        : null,
                     icon: const Icon(Icons.download_done, size: 18),
                     label: Text(
                       parsed.isNotEmpty
@@ -492,7 +573,9 @@ D) colors(0)''';
                       backgroundColor: AppColors.secondary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),

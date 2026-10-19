@@ -17,6 +17,7 @@ class ExamMakerState {
   final ShowAnswersMode showAnswers;
   final int maxAttempts;
   final int? durationMinutes;
+  final int? questionLimit;
   final DateTime? closesAt;
   final bool isPublishing;
   final Exam? publishedExam;
@@ -37,6 +38,7 @@ class ExamMakerState {
     this.showAnswers = ShowAnswersMode.immediately,
     this.maxAttempts = 1,
     this.durationMinutes,
+    this.questionLimit,
     this.closesAt,
     this.isPublishing = false,
     this.publishedExam,
@@ -51,6 +53,10 @@ class ExamMakerState {
   bool get isValid =>
       title.trim().isNotEmpty && subject.trim().isNotEmpty && questions.isNotEmpty;
   bool get isEditing => editingExamId != null;
+  bool get hasQuestionLimit =>
+      questionLimit != null && questionLimit! > 0 && questionLimit! < questions.length;
+  int get effectiveQuestionCount =>
+      hasQuestionLimit ? questionLimit! : questions.length;
 
   ExamMakerState copyWith({
     String? title,
@@ -63,6 +69,8 @@ class ExamMakerState {
     int? maxAttempts,
     int? durationMinutes,
     bool clearDuration = false,
+    int? questionLimit,
+    bool clearQuestionLimit = false,
     DateTime? closesAt,
     bool? isPublishing,
     Exam? publishedExam,
@@ -85,6 +93,7 @@ class ExamMakerState {
       showAnswers: showAnswers ?? this.showAnswers,
       maxAttempts: maxAttempts ?? this.maxAttempts,
       durationMinutes: clearDuration ? null : (durationMinutes ?? this.durationMinutes),
+      questionLimit: clearQuestionLimit ? null : (questionLimit ?? this.questionLimit),
       closesAt: closesAt ?? this.closesAt,
       isPublishing: isPublishing ?? this.isPublishing,
       publishedExam: publishedExam ?? this.publishedExam,
@@ -114,12 +123,20 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
       showAnswers: exam.showAnswers,
       maxAttempts: exam.maxAttemptsPerParticipant,
       durationMinutes: exam.durationMinutes,
+      questionLimit: exam.questionLimit,
       closesAt: exam.closesAt,
       editingExamId: exam.id,
       editingExamCode: exam.code,
       editingExamStatus: exam.status,
       editingCreatedAt: exam.createdAt,
       sectionOrder: List<QuestionType>.from(exam.sectionOrder),
+    );
+  }
+
+  void setQuestionLimit(int? limit) {
+    state = state.copyWith(
+      questionLimit: limit,
+      clearQuestionLimit: limit == null || limit <= 0,
     );
   }
 
@@ -248,6 +265,7 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
           closesAt: state.closesAt,
           maxAttemptsPerParticipant: state.maxAttempts,
           durationMinutes: state.durationMinutes,
+          questionLimit: state.questionLimit,
           sectionOrder: state.sectionOrder,
           questions: state.questions,
           createdAt: state.editingCreatedAt ?? DateTime.now(),
@@ -284,6 +302,7 @@ class ExamMakerController extends StateNotifier<ExamMakerState> {
         closesAt: state.closesAt,
         maxAttemptsPerParticipant: state.maxAttempts,
         durationMinutes: state.durationMinutes,
+        questionLimit: state.questionLimit,
         sectionOrder: state.sectionOrder,
         questions: state.questions,
         createdAt: DateTime.now(),

@@ -15,13 +15,18 @@ class SupabaseConfig {
   /// Whether Supabase client is actively initialized and available.
   static bool get isInitialized => _isInitialized;
 
+  static const String _defaultUrl = 'https://uqgeozkmygvzzqotcaiz.supabase.co';
+  static const String _defaultAnonKey = 'sb_publishable_kQVt1w7gpb-YOf9iWaVizg_THo2XsNj';
+
   /// The configured Supabase project URL.
   static String get supabaseUrl {
     try {
       final fromDotenv = dotenv.env['SUPABASE_URL']?.trim() ?? '';
       if (fromDotenv.isNotEmpty) return fromDotenv;
     } catch (_) {}
-    return const String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    const fromEnv = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return _defaultUrl;
   }
 
   /// The configured Supabase Anon public key.
@@ -30,7 +35,9 @@ class SupabaseConfig {
       final fromDotenv = dotenv.env['SUPABASE_ANON_KEY']?.trim() ?? '';
       if (fromDotenv.isNotEmpty) return fromDotenv;
     } catch (_) {}
-    return const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+    const fromEnv = String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return _defaultAnonKey;
   }
 
   /// Returns true if valid, non-placeholder credentials have been provided.

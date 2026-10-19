@@ -40,8 +40,8 @@ class _FlashcardDraft {
     String front = '',
     String back = '',
     String hint = '',
-    this.showHint = false,
-  })  : frontController = TextEditingController(text: front),
+  })  : showHint = false,
+        frontController = TextEditingController(text: front),
         backController = TextEditingController(text: back),
         hintController = TextEditingController(text: hint);
 
@@ -59,6 +59,7 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
   String? _selectedSubject;
   bool _isCustomSubject = false;
   bool _isSaving = false;
+  int? _cardLimit;
 
   final List<_FlashcardDraft> _cards = [];
 
@@ -387,6 +388,7 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
         description: 'Personal study flashcard deck with ${questions.length} cards.',
         code: '', // Code generated on publish
         status: ExamStatus.published,
+        questionLimit: _cardLimit,
         questions: questions,
         createdAt: DateTime.now(),
       );
@@ -410,7 +412,7 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Created Flashcard Deck "$title" (${questions.length} cards) in $effectiveSubject!',
+                    'Created Flashcard Deck "$title" (${published.questionLimitLabel}) in $effectiveSubject!',
                   ),
                 ),
               ],
@@ -423,7 +425,10 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
 
         if (startStudy) {
           // Immediately launch the flashcard focus study session
-          context.push('/study/flashcards', extra: published.questions);
+          final studyQuestions = published.hasQuestionLimit
+              ? (List<Question>.from(published.questions)..shuffle()).take(published.questionLimit!).toList()
+              : published.questions;
+          context.push('/study/flashcards', extra: studyQuestions);
         }
       }
 
@@ -549,7 +554,7 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _isCustomSubject
+                          initialValue: _isCustomSubject
                               ? '__custom__'
                               : (_selectedSubject != null && existingSubjects.contains(_selectedSubject)
                                   ? _selectedSubject
@@ -591,6 +596,44 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+
+                  // Cards Shown Per Study Session
+                  const Text(
+                    'CARDS SHOWN PER STUDY SESSION (RANDOM DRAW)',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('All Cards'),
+                        selected: _cardLimit == null || _cardLimit! <= 0,
+                        selectedColor: AppColors.secondary.withValues(alpha: 0.25),
+                        checkmarkColor: AppColors.secondary,
+                        onSelected: (_) => setState(() => _cardLimit = null),
+                      ),
+                      ...[5, 10, 15, 20, 25, 50].map((count) {
+                        final isSel = _cardLimit == count;
+                        return ChoiceChip(
+                          label: Text('$count Cards'),
+                          selected: isSel,
+                          selectedColor: AppColors.secondary.withValues(alpha: 0.25),
+                          checkmarkColor: AppColors.secondary,
+                          onSelected: (_) => setState(() => _cardLimit = count),
+                        );
+                      }),
+                    ],
+                  ),
+                  if (_cardLimit != null && _cardLimit! > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '🎲 Each session will randomly pick $_cardLimit cards from your deck with no duplicates.',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.secondary),
                     ),
                   ],
                   const SizedBox(height: 20),

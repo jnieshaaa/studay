@@ -664,7 +664,10 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
   }
 
   void _flashcardsExam(BuildContext context, Exam quiz) {
-    context.push('/study/flashcards', extra: quiz.questions);
+    final questions = quiz.hasQuestionLimit
+        ? (quiz.questions.toList()..shuffle()).take(quiz.questionLimit!).toList()
+        : quiz.questions;
+    context.push('/study/flashcards', extra: questions);
   }
 
   void _takeExam(BuildContext context, Exam quiz) {

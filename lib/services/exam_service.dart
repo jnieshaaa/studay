@@ -10,6 +10,7 @@ import '../core/utils/code_generator.dart';
 import 'seed_data_service.dart';
 import 'local_storage_service.dart';
 import 'supabase_exam_service.dart';
+import '../core/config/supabase_config.dart';
 
 class ExamService extends ChangeNotifier {
   final LocalStorageService _storage;
@@ -376,6 +377,35 @@ class ExamService extends ChangeNotifier {
     return updated;
   }
 
+  /// Updates or clears question limit (number of questions sampled) for an exam
+  Future<Exam> updateExamQuestionLimit(String examId, int? questionLimit) async {
+    final exam = _examsById[examId];
+    if (exam == null) {
+      throw Exception('Quiz not found.');
+    }
+    final updated = exam.copyWith(
+      questionLimit: questionLimit,
+      clearQuestionLimit: questionLimit == null || questionLimit <= 0,
+    );
+
+    _examsById[examId] = updated;
+    _examsByCode[updated.code.toUpperCase()] = updated;
+
+    await _storage.saveCreatedExam(updated);
+
+    final supabase = _supabase;
+    if (supabase != null && supabase.isAvailable) {
+      try {
+        await supabase.publishExam(updated);
+      } catch (e) {
+        debugPrint('[ExamService] Remote question limit update failed (saved locally): $e');
+      }
+    }
+
+    notifyListeners();
+    return updated;
+  }
+
   /// Updates an existing exam (e.g. edited questions, title, settings) and persists it
   Future<Exam> updateExam(Exam updatedExam) async {
     _examsById[updatedExam.id] = updatedExam;
@@ -408,7 +438,11 @@ class ExamService extends ChangeNotifier {
     final local = _examsByCode[cleanCode];
     if (local != null) return local;
 
-    final supabase = _supabase;
+    var supabase = _supabase;
+    if (supabase != null && !supabase.isAvailable) {
+      await SupabaseConfig.initialize();
+    }
+
     if (supabase != null && supabase.isAvailable) {
       try {
         final remote = await supabase.fetchExamByCode(cleanCode);
@@ -517,8 +551,8 @@ class ExamService extends ChangeNotifier {
       bundleData = await _storage.loadSubjectBundle(normalizedCode);
 
       // 2. Try Supabase bundle
-      if (bundleData == null && _supabase != null && _supabase!.isAvailable) {
-        bundleData = await _supabase!.fetchSubjectBundle(normalizedCode);
+      if (bundleData == null && _supabase != null && _supabase.isAvailable) {
+        bundleData = await _supabase.fetchSubjectBundle(normalizedCode);
       }
 
       // 3. If still not found and code could be a single exam code, try fetching single exam
@@ -616,9 +650,9 @@ class ExamService extends ChangeNotifier {
 
       await _storage.saveCreatedExam(importedExam);
 
-      if (_supabase != null && _supabase!.isAvailable) {
+      if (_supabase != null && _supabase.isAvailable) {
         try {
-          await _supabase!.publishExam(importedExam);
+          await _supabase.publishExam(importedExam);
         } catch (_) {}
       }
 

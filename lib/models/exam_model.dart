@@ -59,6 +59,7 @@ class Exam {
   final DateTime? closesAt;
   final int maxAttemptsPerParticipant;
   final int? durationMinutes; // Timer limit in minutes e.g. 10, 15, 30, or null for untimed
+  final int? questionLimit; // Max items shown in exam (e.g. 20 out of 100). If null or <= 0, show all.
   final List<QuestionType> sectionOrder;
   final List<Question> questions;
   final DateTime createdAt;
@@ -78,6 +79,7 @@ class Exam {
     this.closesAt,
     this.maxAttemptsPerParticipant = 1,
     this.durationMinutes,
+    this.questionLimit,
     this.sectionOrder = defaultSectionOrder,
     this.questions = const [],
     required this.createdAt,
@@ -137,6 +139,30 @@ class Exam {
     return presentTypes.length;
   }
 
+  /// Effective question count for takers (e.g. 20 if questionLimit is 20 out of 100 questions)
+  int get effectiveQuestionCount =>
+      (questionLimit != null && questionLimit! > 0 && questionLimit! < questions.length)
+          ? questionLimit!
+          : questions.length;
+
+  /// Whether this exam samples a subset from a larger question bank
+  bool get hasQuestionLimit =>
+      questionLimit != null && questionLimit! > 0 && questionLimit! < questions.length;
+
+  /// User-friendly label for question count or sample size (e.g. "20 of 100 Qs" or "20 Qs")
+  String get questionLimitLabel => hasQuestionLimit
+      ? '$questionLimit of ${questions.length} Qs'
+      : '${questions.length} Qs';
+
+  /// Clean description without any embedded metadata comments
+  String get cleanDescription =>
+      description.replaceAll(RegExp(r'\s*<!--limit:\d+-->'), '').trim();
+
+  static int? _parseLimitFromDesc(String desc) {
+    final match = RegExp(r'<!--limit:(\d+)-->').firstMatch(desc);
+    return match != null ? int.tryParse(match.group(1)!) : null;
+  }
+
   Exam copyWith({
     String? id,
     String? creatorId,
@@ -153,6 +179,8 @@ class Exam {
     int? maxAttemptsPerParticipant,
     int? durationMinutes,
     bool clearDuration = false,
+    int? questionLimit,
+    bool clearQuestionLimit = false,
     List<QuestionType>? sectionOrder,
     List<Question>? questions,
     DateTime? createdAt,
@@ -173,6 +201,7 @@ class Exam {
       maxAttemptsPerParticipant:
           maxAttemptsPerParticipant ?? this.maxAttemptsPerParticipant,
       durationMinutes: clearDuration ? null : (durationMinutes ?? this.durationMinutes),
+      questionLimit: clearQuestionLimit ? null : (questionLimit ?? this.questionLimit),
       sectionOrder: sectionOrder ?? this.sectionOrder,
       questions: questions ?? this.questions,
       createdAt: createdAt ?? this.createdAt,
@@ -194,56 +223,64 @@ class Exam {
         'closes_at': closesAt?.toIso8601String(),
         'max_attempts_per_participant': maxAttemptsPerParticipant,
         'duration_minutes': durationMinutes,
+        'question_limit': questionLimit,
         'section_order': sectionOrder.map((t) => t.name).toList(),
         'questions': questions.map((q) => q.toJson()).toList(),
         'created_at': createdAt.toIso8601String(),
       };
 
-  factory Exam.fromJson(Map<String, dynamic> json) => Exam(
-        id: json['id'] as String,
-        creatorId: json['creator_id'] as String? ?? '',
-        title: json['title'] as String,
-        subject: json['subject'] as String? ?? 'General Knowledge',
-        description: json['description'] as String? ?? '',
-        code: json['code'] as String,
-        status: ExamStatus.values.firstWhere(
-          (s) => s.name == json['status'],
-          orElse: () => ExamStatus.published,
-        ),
-        questionOrder: QuestionOrder.values.firstWhere(
-          (o) => o.name == json['question_order'],
-          orElse: () => QuestionOrder.shuffled,
-        ),
-        choiceOrder: ChoiceOrder.values.firstWhere(
-          (o) => o.name == json['choice_order'],
-          orElse: () => ChoiceOrder.shuffled,
-        ),
-        showAnswers: ShowAnswersMode.values.firstWhere(
-          (m) => m.name == json['show_answers'],
-          orElse: () => ShowAnswersMode.immediately,
-        ),
-        opensAt: json['opens_at'] != null
-            ? DateTime.tryParse(json['opens_at'] as String)
-            : null,
-        closesAt: json['closes_at'] != null
-            ? DateTime.tryParse(json['closes_at'] as String)
-            : null,
-        maxAttemptsPerParticipant:
-            json['max_attempts_per_participant'] as int? ?? 1,
-        durationMinutes: json['duration_minutes'] as int?,
-        sectionOrder: (json['section_order'] as List<dynamic>?)
-                ?.map((name) => QuestionType.values.firstWhere(
-                      (t) => t.name == name,
-                      orElse: () => QuestionType.multipleChoice,
-                    ))
-                .toList() ??
-            defaultSectionOrder,
-        questions: (json['questions'] as List<dynamic>?)
-                ?.map((q) => Question.fromJson(q as Map<String, dynamic>))
-                .toList() ??
-            const [],
-        createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
-            DateTime.now(),
-      );
+  factory Exam.fromJson(Map<String, dynamic> json) {
+    final rawDesc = json['description'] as String? ?? '';
+    final parsedLimit = _parseLimitFromDesc(rawDesc);
+    final limit = json['question_limit'] as int? ?? parsedLimit;
+
+    return Exam(
+      id: json['id'] as String,
+      creatorId: json['creator_id'] as String? ?? '',
+      title: json['title'] as String,
+      subject: json['subject'] as String? ?? 'General Knowledge',
+      description: rawDesc,
+      code: json['code'] as String,
+      status: ExamStatus.values.firstWhere(
+        (s) => s.name == json['status'],
+        orElse: () => ExamStatus.published,
+      ),
+      questionOrder: QuestionOrder.values.firstWhere(
+        (o) => o.name == json['question_order'],
+        orElse: () => QuestionOrder.shuffled,
+      ),
+      choiceOrder: ChoiceOrder.values.firstWhere(
+        (o) => o.name == json['choice_order'],
+        orElse: () => ChoiceOrder.shuffled,
+      ),
+      showAnswers: ShowAnswersMode.values.firstWhere(
+        (m) => m.name == json['show_answers'],
+        orElse: () => ShowAnswersMode.immediately,
+      ),
+      opensAt: json['opens_at'] != null
+          ? DateTime.tryParse(json['opens_at'] as String)
+          : null,
+      closesAt: json['closes_at'] != null
+          ? DateTime.tryParse(json['closes_at'] as String)
+          : null,
+      maxAttemptsPerParticipant:
+          json['max_attempts_per_participant'] as int? ?? 1,
+      durationMinutes: json['duration_minutes'] as int?,
+      questionLimit: limit,
+      sectionOrder: (json['section_order'] as List<dynamic>?)
+              ?.map((name) => QuestionType.values.firstWhere(
+                    (t) => t.name == name,
+                    orElse: () => QuestionType.multipleChoice,
+                  ))
+              .toList() ??
+          defaultSectionOrder,
+      questions: (json['questions'] as List<dynamic>?)
+              ?.map((q) => Question.fromJson(q as Map<String, dynamic>))
+              .toList() ??
+          const [],
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ??
+          DateTime.now(),
+    );
+  }
 
 }

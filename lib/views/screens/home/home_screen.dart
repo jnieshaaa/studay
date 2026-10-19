@@ -240,10 +240,6 @@ class HomeScreen extends ConsumerWidget {
                       _buildExamModeCard(context, isDark),
                     ],
                   ),
-                const SizedBox(height: 16),
-
-                // Dedicated My Library & Category Card
-                _buildLibraryCard(context, isDark),
                 const SizedBox(height: 28),
 
                 // Personal Performance Stats Header
@@ -454,78 +450,6 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLibraryCard(BuildContext context, bool isDark) {
-    final borderColor = isDark ? const Color(0xFF28283A) : const Color(0xFFE4E4EC);
-    return GradientCard(
-      onTap: () => context.push('/library'),
-      padding: const EdgeInsets.all(20),
-      borderColor: borderColor,
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFECECF2),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: borderColor),
-            ),
-            child: const Icon(Icons.collections_bookmark_outlined, color: AppColors.secondary, size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Wrap(
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    const Text(
-                      'Subject Cards & Quizzes',
-                      style: TextStyle(
-                        fontSize: 16.5,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1A1A24) : const Color(0xFFEAEAF0),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'MY LIBRARY',
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? const Color(0xFF9E9EB2) : const Color(0xFF6B6B7F),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Explore your subject cards and quizzes. Creators save and manage their work here.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    color: isDark
-                        ? const Color(0xFF8E8EA2)
-                        : const Color(0xFF707084),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_right, color: isDark ? const Color(0xFF6E6E82) : const Color(0xFFA0A0B0)),
-        ],
-      ),
-    );
-  }
-
   Widget _buildUserChip(BuildContext context, WidgetRef ref, UserModel? user) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDark ? const Color(0xFF28283A) : const Color(0xFFE4E4EC);
@@ -654,7 +578,7 @@ class HomeScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.collections_bookmark_outlined, color: AppColors.secondary),
                   title: const Text('Go to My Library', style: TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: const Text('View Subject Cards and your quizzes'),
+                  subtitle: const Text('View all your created quizzes and exams'),
                   trailing: const Icon(Icons.chevron_right),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   onTap: () {

@@ -641,6 +641,89 @@ D) colors(0)
       expect(parsed[4].choices[0], 'colors[0]');
     });
 
+    test('Parses plain format questions without numbers and without A/B/C/D prefixes (creator plain format)', () {
+      const plainInput = '''
+Which keyword declares a block-scoped variable that cannot be reassigned?
+var
+let
+const
+static
+
+Which of the following is the correct syntax for a single-line comment in JavaScript?
+<!-- comment -->
+# comment
+// comment
+/* comment */
+
+Which HTML tag and attribute combination correctly links an external JavaScript file called main.js?
+<script href="main.js"></script>
+<script src="main.js"></script>
+<javascript link="main.js"></javascript>
+<link rel="script" href="main.js">
+''';
+
+      final parsed = BulkQuestionParser.parse(plainInput);
+      expect(parsed.length, 3);
+
+      // Question 1
+      expect(
+        parsed[0].questionText,
+        'Which keyword declares a block-scoped variable that cannot be reassigned?',
+      );
+      expect(parsed[0].choices, ['var', 'let', 'const', 'static']);
+      expect(parsed[0].correctChoiceIndex, 0);
+
+      // Question 2
+      expect(
+        parsed[1].questionText,
+        'Which of the following is the correct syntax for a single-line comment in JavaScript?',
+      );
+      expect(parsed[1].choices, ['<!-- comment -->', '# comment', '// comment', '/* comment */']);
+      expect(parsed[1].correctChoiceIndex, 0);
+
+      // Question 3
+      expect(
+        parsed[2].questionText,
+        'Which HTML tag and attribute combination correctly links an external JavaScript file called main.js?',
+      );
+      expect(parsed[2].choices, [
+        '<script href="main.js"></script>',
+        '<script src="main.js"></script>',
+        '<javascript link="main.js"></javascript>',
+        '<link rel="script" href="main.js">',
+      ]);
+      expect(parsed[2].correctChoiceIndex, 0);
+    });
+
+    test('Parses plain format with inline asterisk or answer lines', () {
+      const plainWithMarkers = '''
+Which keyword declares a block-scoped variable that cannot be reassigned?
+var
+let
+*const
+static
+
+What is 5 + 5?
+5
+10
+15
+20
+Answer: 10
+Explanation: Basic arithmetic.
+''';
+
+      final parsed = BulkQuestionParser.parse(plainWithMarkers);
+      expect(parsed.length, 2);
+
+      expect(parsed[0].choices, ['var', 'let', 'const', 'static']);
+      expect(parsed[0].correctChoiceIndex, 2); // 'const' marked with *
+
+      expect(parsed[1].questionText, 'What is 5 + 5?');
+      expect(parsed[1].choices, ['5', '10', '15', '20']);
+      expect(parsed[1].correctChoiceIndex, 1); // '10' specified in Answer: 10
+      expect(parsed[1].explanation, 'Basic arithmetic.');
+    });
+
     test('Parses answers and explanations when provided', () {
       const inputWithAnswer = '''
 1. What is the capital of France?
@@ -1078,6 +1161,329 @@ D) /*
       expect(fetched2, isNotNull);
       expect(fetched1!.title, 'Grammar Fundamentals');
       expect(fetched2!.title, 'Vocabulary Master');
+    });
+  });
+
+  group('Question Bank Limit & Random Non-Repetitive Sampling Tests', () {
+    late ProviderContainer container;
+
+    setUp(() {
+      container = ProviderContainer();
+    });
+
+    tearDown(() {
+      container.dispose();
+    });
+
+    test('Exam model correctly handles questionLimit and description fallback tag', () {
+      final exam = Exam(
+        id: 'exam_bank_1',
+        creatorId: 'maker',
+        title: 'Large Bank Exam',
+        subject: 'Science',
+        description: 'Comprehensive Exam Bank',
+        code: 'BNK100',
+        questionLimit: 20,
+        createdAt: DateTime.now(),
+        questions: List<Question>.generate(
+          100,
+          (i) => Question(
+            id: 'q_$i',
+            topicId: 't1',
+            subjectId: 's1',
+            questionText: 'Question #$i',
+            questionType: QuestionType.multipleChoice,
+            choices: [
+              QuestionChoice(id: 'c_${i}_1', questionId: 'q_$i', choiceText: 'A', isCorrect: true),
+              QuestionChoice(id: 'c_${i}_2', questionId: 'q_$i', choiceText: 'B', isCorrect: false),
+            ],
+          ),
+        ),
+      );
+
+      expect(exam.hasQuestionLimit, isTrue);
+      expect(exam.effectiveQuestionCount, 20);
+      expect(exam.questionLimitLabel, '20 of 100 Qs');
+
+      // Test toJson and fromJson round-trip
+      final json = exam.toJson();
+      expect(json['question_limit'], 20);
+
+      final restored = Exam.fromJson(json);
+      expect(restored.questionLimit, 20);
+      expect(restored.hasQuestionLimit, isTrue);
+
+      // Test description tag fallback <!--limit:20-->
+      final remoteJsonWithoutLimitCol = Map<String, dynamic>.from(json)
+        ..remove('question_limit')
+        ..['description'] = 'Comprehensive Exam Bank\n<!--limit:20-->';
+
+      final restoredFromDesc = Exam.fromJson(remoteJsonWithoutLimitCol);
+      expect(restoredFromDesc.questionLimit, 20);
+      expect(restoredFromDesc.hasQuestionLimit, isTrue);
+      expect(restoredFromDesc.cleanDescription, 'Comprehensive Exam Bank');
+    });
+
+    test('ExamParticipantController samples exactly 20 unique non-repetitive questions from 100 bank', () {
+      final bankQuestions = List<Question>.generate(
+        100,
+        (i) => Question(
+          id: 'q_item_$i',
+          topicId: 'topic_math',
+          subjectId: 's_math',
+          questionText: 'Math Problem #$i',
+          questionType: QuestionType.multipleChoice,
+          choices: [
+            QuestionChoice(id: 'c_${i}_1', questionId: 'q_item_$i', choiceText: 'Answer A', isCorrect: true),
+            QuestionChoice(id: 'c_${i}_2', questionId: 'q_item_$i', choiceText: 'Answer B', isCorrect: false),
+          ],
+        ),
+      );
+
+      final exam = Exam(
+        id: 'exam_sample_test',
+        creatorId: 'maker',
+        title: '100 Question Bank (20 Sampled)',
+        subject: 'Math',
+        description: '100 questions bank',
+        code: 'SAM100',
+        questionLimit: 20,
+        questionOrder: QuestionOrder.shuffled,
+        choiceOrder: ChoiceOrder.shuffled,
+        createdAt: DateTime.now(),
+        questions: bankQuestions,
+      );
+
+      final participant = ExamParticipant(
+        id: 'part_user_1',
+        examId: exam.id,
+        nickname: 'Student A',
+        deviceToken: 'dev_token_1',
+        joinedAt: DateTime.now(),
+      );
+
+      final param = ExamParticipantParam(exam, participant);
+      final playState = container.read(examParticipantControllerProvider(param));
+
+      // 1. Verify EXACTLY 20 questions were selected for the taker
+      expect(playState.exam.questions.length, 20);
+
+      // 2. Verify all 20 question IDs are UNIQUE (0 duplicates / non-repetitive)
+      final sampledIds = playState.exam.questions.map((q) => q.id).toSet();
+      expect(sampledIds.length, 20, reason: 'All 20 sampled questions must be strictly unique without repetitions');
+
+      // 3. Verify every sampled question belongs to the original 100 bank
+      final originalIds = bankQuestions.map((q) => q.id).toSet();
+      expect(originalIds.containsAll(sampledIds), isTrue);
+
+      // 4. Multiple attempts draw varied randomized subsets without repetition
+      final container2 = ProviderContainer();
+      addTearDown(container2.dispose);
+      final playState2 = container2.read(examParticipantControllerProvider(param));
+      expect(playState2.exam.questions.length, 20);
+      final sampledIds2 = playState2.exam.questions.map((q) => q.id).toSet();
+      expect(sampledIds2.length, 20);
+    });
+
+    test('ExamParticipantController preserves section order when sampling questions across types', () {
+      final mcqQuestions = List<Question>.generate(
+        50,
+        (i) => Question(
+          id: 'mcq_$i',
+          topicId: 't',
+          subjectId: 's',
+          questionText: 'MCQ $i',
+          questionType: QuestionType.multipleChoice,
+          choices: [
+            QuestionChoice(id: 'c_mcq_$i', questionId: 'mcq_$i', choiceText: 'A', isCorrect: true),
+          ],
+        ),
+      );
+
+      final tfQuestions = List<Question>.generate(
+        30,
+        (i) => Question(
+          id: 'tf_$i',
+          topicId: 't',
+          subjectId: 's',
+          questionText: 'True or False $i',
+          questionType: QuestionType.trueFalse,
+          choices: [
+            QuestionChoice(id: 'c_tf_${i}_1', questionId: 'tf_$i', choiceText: 'True', isCorrect: true),
+            QuestionChoice(id: 'c_tf_${i}_2', questionId: 'tf_$i', choiceText: 'False', isCorrect: false),
+          ],
+        ),
+      );
+
+      final matchQuestions = List<Question>.generate(
+        20,
+        (i) => Question(
+          id: 'match_$i',
+          topicId: 't',
+          subjectId: 's',
+          questionText: 'Match column $i',
+          questionType: QuestionType.matching,
+          matchingPairs: [
+            MatchingPair(id: 'p1', questionId: 'match_$i', leftText: 'Left $i', rightText: 'Right $i'),
+          ],
+        ),
+      );
+
+      final all100Questions = <Question>[...mcqQuestions, ...tfQuestions, ...matchQuestions];
+
+      final exam = Exam(
+        id: 'mixed_exam',
+        creatorId: 'maker',
+        title: 'Mixed Exam',
+        subject: 'History',
+        description: 'Multi-type bank',
+        code: 'MIX100',
+        questionLimit: 25,
+        sectionOrder: const [
+          QuestionType.multipleChoice,
+          QuestionType.trueFalse,
+          QuestionType.matching,
+        ],
+        createdAt: DateTime.now(),
+        questions: all100Questions,
+      );
+
+      final participant = ExamParticipant(
+        id: 'p1',
+        examId: exam.id,
+        nickname: 'Student B',
+        deviceToken: 'dev_token_b',
+        joinedAt: DateTime.now(),
+      );
+
+      final param = ExamParticipantParam(exam, participant);
+      final sampledQuestions = container.read(examParticipantControllerProvider(param)).exam.questions;
+
+      expect(sampledQuestions.length, 25);
+      final sampledSet = sampledQuestions.map((q) => q.id).toSet();
+      expect(sampledSet.length, 25, reason: 'Zero duplicate questions');
+
+      // Verify questions are partitioned cleanly by sectionOrder:
+      // All Multiple Choice must appear before True/False, and True/False before Matching
+      int lastTypeOrder = 0;
+      for (final q in sampledQuestions) {
+        final currentTypeOrder = exam.sectionOrder.indexOf(q.questionType);
+        expect(currentTypeOrder, greaterThanOrEqualTo(lastTypeOrder),
+            reason: 'Questions must follow section order sequence even after sampling');
+        lastTypeOrder = currentTypeOrder;
+      }
+    });
+
+    test('FlashcardController sampleDeck and shuffleDeck allow studying sampled subsets', () {
+      final flashcards = List<Question>.generate(
+        100,
+        (i) => Question(
+          id: 'card_$i',
+          topicId: 'vocab',
+          subjectId: 's_vocab',
+          questionText: 'Word #$i',
+          questionType: QuestionType.multipleChoice,
+          choices: [
+            QuestionChoice(id: 'def_$i', questionId: 'card_$i', choiceText: 'Definition #$i', isCorrect: true),
+          ],
+        ),
+      );
+
+      final provider = flashcardControllerProvider(flashcards);
+      final controller = container.read(provider.notifier);
+
+      expect(container.read(provider).deck.length, 100);
+
+      // Sample down to 20 random cards
+      controller.sampleDeck(20);
+      final state = container.read(provider);
+      expect(state.deck.length, 20);
+      final uniqueSampledIds = state.deck.map((q) => q.id).toSet();
+      expect(uniqueSampledIds.length, 20, reason: 'Sampled flashcards have zero duplicate cards');
+
+      // Shuffle deck
+      controller.shuffleDeck();
+      expect(container.read(provider).deck.length, 20);
+      expect(container.read(provider).currentIndex, 0);
+    });
+
+    test('StudyController buildQuizSessionForExam samples questionLimit non-repetitive items', () {
+      final studyController = container.read(studyControllerProvider.notifier);
+      final bank = List<Question>.generate(
+        100,
+        (i) => Question(
+          id: 'q_study_$i',
+          topicId: 't',
+          subjectId: 's',
+          questionText: 'Study Item $i',
+          questionType: QuestionType.multipleChoice,
+          choices: [
+            QuestionChoice(id: 'c_$i', questionId: 'q_study_$i', choiceText: 'Correct $i', isCorrect: true),
+          ],
+        ),
+      );
+
+      final exam = Exam(
+        id: 'study_exam_bank',
+        creatorId: 'maker',
+        title: 'Study Bank',
+        subject: 'General Knowledge',
+        description: 'Study questions',
+        code: 'STD100',
+        questionLimit: 20,
+        createdAt: DateTime.now(),
+        questions: bank,
+      );
+
+      final session = studyController.buildQuizSessionForExam(exam);
+      expect(session.questions.length, 20);
+      final uniqueIds = session.questions.map((q) => q.id).toSet();
+      expect(uniqueIds.length, 20, reason: 'Session contains strictly 20 unique items without repetitions');
+    });
+
+    test('ExamService updateExamQuestionLimit updates exam and preserves limit', () async {
+      final storage = LocalStorageService();
+      final service = ExamService(storage, seedDefaultExams: false);
+
+      final created = await service.publishExam(
+        Exam(
+          id: 'exam_dyn_limit',
+          title: 'Dynamic Limit Quiz',
+          description: 'Testing limit updates',
+          subject: 'Science',
+          code: 'DYN001',
+          creatorId: 'test_user',
+          status: ExamStatus.published,
+          createdAt: DateTime.now(),
+          questions: List<Question>.generate(
+            50,
+            (i) => Question(
+              id: 'dyn_q_$i',
+              topicId: 't',
+              subjectId: 's',
+              questionText: 'Dyn Question $i',
+              questionType: QuestionType.multipleChoice,
+              choices: [
+                QuestionChoice(id: 'c_$i', questionId: 'dyn_q_$i', choiceText: 'Ans', isCorrect: true),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(created.questionLimit, isNull);
+
+      // Set question limit to 15
+      final updated = await service.updateExamQuestionLimit(created.id, 15);
+      expect(updated.questionLimit, 15);
+      expect(updated.hasQuestionLimit, isTrue);
+      expect(updated.questionLimitLabel, '15 of 50 Qs');
+
+      // Clear question limit (set back to null)
+      final cleared = await service.updateExamQuestionLimit(created.id, null);
+      expect(cleared.questionLimit, isNull);
+      expect(cleared.hasQuestionLimit, isFalse);
+      expect(cleared.questionLimitLabel, '50 Qs');
     });
   });
 }

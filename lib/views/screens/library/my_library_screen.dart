@@ -678,12 +678,52 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                 runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(
-                    '${quiz.questions.length} Questions',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                  // Creator Question Limit / Sampling Control Button
+                  InkWell(
+                    onTap: () => _showEditQuestionLimitDialog(context, quiz),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                      decoration: BoxDecoration(
+                        color: quiz.hasQuestionLimit
+                            ? AppColors.primary.withValues(alpha: 0.15)
+                            : (isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2)),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: quiz.hasQuestionLimit
+                              ? AppColors.primary.withValues(alpha: 0.4)
+                              : (isDark ? const Color(0xFF2C2C3E) : const Color(0xFFDCDCE8)),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.shuffle_rounded,
+                            size: 13,
+                            color: quiz.hasQuestionLimit
+                                ? AppColors.primary
+                                : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            quiz.questionLimitLabel,
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              color: quiz.hasQuestionLimit ? AppColors.primary : null,
+                            ),
+                          ),
+                          const SizedBox(width: 3),
+                          Icon(
+                            Icons.edit,
+                            size: 11,
+                            color: quiz.hasQuestionLimit
+                                ? AppColors.primary
+                                : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   // Creator Timer Control Button
@@ -923,6 +963,131 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                     }
                   },
                   child: const Text('Save Timer'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showEditQuestionLimitDialog(BuildContext context, Exam quiz) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    int? selectedLimit = quiz.questionLimit;
+    final customController = TextEditingController(
+      text: quiz.questionLimit != null && quiz.questionLimit! > 0
+          ? '${quiz.questionLimit}'
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Row(
+                children: [
+                  Icon(Icons.shuffle_rounded, color: AppColors.primary),
+                  SizedBox(width: 8),
+                  Text('Questions Per Exam', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Set how many questions will randomly appear in "${quiz.title}" (Total in bank: ${quiz.questions.length}). Questions will never repeat.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      null, // All
+                      10,
+                      20,
+                      25,
+                      50,
+                    ].where((n) => n == null || n < quiz.questions.length).map((limit) {
+                      final isSelected = selectedLimit == limit;
+                      final label = limit == null ? 'All (${quiz.questions.length})' : '$limit Qs';
+                      return ChoiceChip(
+                        label: Text(label),
+                        selected: isSelected,
+                        selectedColor: AppColors.primary.withValues(alpha: 0.25),
+                        checkmarkColor: AppColors.primary,
+                        onSelected: (_) {
+                          setDialogState(() {
+                            selectedLimit = limit;
+                            customController.text = limit == null ? '' : '$limit';
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: customController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Custom Item Count',
+                      hintText: 'e.g. 20',
+                      prefixIcon: const Icon(Icons.pin, size: 18),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val.trim());
+                      setDialogState(() {
+                        selectedLimit = (parsed != null && parsed > 0 && parsed < quiz.questions.length)
+                            ? parsed
+                            : null;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  onPressed: () async {
+                    final parsed = int.tryParse(customController.text.trim());
+                    final finalLimit = (parsed != null && parsed > 0 && parsed < quiz.questions.length)
+                        ? parsed
+                        : selectedLimit;
+                    await ref.read(examServiceProvider).updateExamQuestionLimit(quiz.id, finalLimit);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            finalLimit == null
+                                ? 'Exam will now show all ${quiz.questions.length} questions'
+                                : 'Exam will randomly draw $finalLimit of ${quiz.questions.length} questions (no repeats)',
+                          ),
+                          backgroundColor: AppColors.primary,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Save Limit'),
                 ),
               ],
             );
