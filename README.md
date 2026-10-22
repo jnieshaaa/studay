@@ -1,4 +1,4 @@
-# 📚 StuDay — The Dual-Engine Study & Exam Platform
+# StuDay — The Dual-Engine Study & Exam Platform
 
 <p align="center">
   <b>A modern, offline-first study companion and real-time live exam platform built with Flutter & Supabase.</b>
@@ -15,7 +15,7 @@
 
 ---
 
-## 🌟 What is StuDay?
+## What is StuDay?
 
 **StuDay** is an all-in-one educational platform engineered for both **individual learners** and **educators / quiz hosts**. It operates on a **Dual-Engine Architecture**:
 
@@ -24,20 +24,20 @@
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-### 🗂️ 1. Flashcards & Active Recall
+### 1. Flashcards & Active Recall
 - **Dual Study Modes**:
   - **Flip Cards (Review)**: Smooth 3D card flips displaying Front, Back, and Hint, paired with mastery tracking (*"Still Learning"* vs. *"Got It!"*).
   - **Type-in Quiz (Active Recall)**: Deepen retention by typing the answer from memory. Includes automated evaluation, displays correct answers upon error, and provides a **Pass** button to skip when needed.
 - **Dedicated Deck Creator & Editor**: Easily create or edit decks with custom card counts, hints, and randomized sampling limits.
 
-### 📝 2. Live Exam Hosting & Frictionless Join
+### 2. Live Exam Hosting & Frictionless Join
 - **Zero-Friction Access**: Participants enter a 6-character room code and their nickname. No passwords, emails, or OAuth required.
 - **Real-Time Synchronized Engine**: Backed by Supabase PostgreSQL with real-time participation tracking and automated instant grading.
 - **Host Dashboard**: Live participant list, submission tracking, average scores, and question-by-question analytics.
 
-### ⚡ 3. Powerful Exam Maker & Bulk Question Parser
+### 3. Powerful Exam Maker & Bulk Question Parser
 - **Question Types**: Multiple Choice (MCQ), True / False, and dynamic premise-target Matching Types.
 - **Smart Bulk Question Parser**: Paste unformatted questions or notes directly:
   - Supports standard numbered formats (`1. Question`, `A) Choice`), plain multi-line text, and inline correct answer indicators (`*`, `(correct)`).
@@ -45,7 +45,7 @@
 - **Section Ordering**: Drag-and-drop section dividers to organize exams (e.g., force Matching section first, then MCQ).
 - **Question Bank Sampling**: Set a bank limit (e.g., randomize 20 unique non-repetitive questions from a pool of 100).
 
-### 📚 4. My Library & Subject Organization
+### 4. My Library & Subject Organization
 - **Subject-Based Navigation**: Organize quizzes and flashcards into clear subjects (e.g., *Mathematics, Science, English, Filipino*).
 - **Subject Sharing**: Generate unique share codes to distribute an entire subject bundle of quizzes to other students.
 - **Clean 3-Dots Management Menu (`⋮`)**:
@@ -56,7 +56,7 @@
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+## Architecture & Technology Stack
 
 | Layer | Technology | Details |
 | :--- | :--- | :--- |
@@ -69,7 +69,7 @@
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 quizz_app/
@@ -99,7 +99,7 @@ quizz_app/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - [Flutter SDK](https://docs.flutter.dev/get-started/install) (`^3.9.2` or later)
@@ -136,7 +136,7 @@ quizz_app/
 
 ---
 
-## 🧪 Testing
+## Testing
 
 StuDay maintains a comprehensive automated test suite covering unit logic, parsers, and widget interactions:
 
@@ -150,6 +150,6 @@ flutter test
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
