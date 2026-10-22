@@ -6,13 +6,16 @@ import 'package:quizz_app/main.dart';
 import 'package:quizz_app/views/screens/splash/splash_screen.dart';
 import 'package:quizz_app/views/screens/auth/username_setup_screen.dart';
 import 'package:quizz_app/views/screens/library/my_library_screen.dart';
+import 'package:quizz_app/views/screens/library/subject_quizzes_screen.dart';
 import 'package:quizz_app/views/screens/study/study_home_screen.dart';
 import 'package:quizz_app/views/screens/exam/exam_maker_screen.dart';
 import 'package:quizz_app/models/question_model.dart';
+import 'package:quizz_app/models/exam_model.dart';
 import 'package:quizz_app/views/screens/exam/exam_section_questions_screen.dart';
 import 'package:quizz_app/controllers/auth_controller.dart';
 import 'package:quizz_app/controllers/exam_maker_controller.dart';
 import 'package:quizz_app/controllers/providers.dart';
+import 'package:quizz_app/controllers/study_controller.dart';
 import 'package:quizz_app/views/screens/study/create_flashcard_sheet.dart';
 import 'package:quizz_app/views/screens/study/flashcards_screen.dart';
 
@@ -141,21 +144,34 @@ void main() {
     expect(find.text('English'), findsWidgets);
     expect(find.text('Math'), findsWidgets);
 
-    // Verify subject cards start collapsed by default for a clean, uncluttered overview
-    expect(find.text('1 quiz hidden • Tap to view or manage'), findsWidgets);
+    // Subject cards are clickable cards and do not render quizzes inline
     expect(find.text('Quiz 1: Wika at Balarila'), findsNothing);
 
-    // Tap Filipino header to expand it
-    final filipinoHeader = find.text('Filipino').first;
-    await tester.ensureVisible(filipinoHeader);
-    await tester.tap(filipinoHeader);
+    // Tap Filipino subject card to open its dedicated SubjectQuizzesScreen
+    final filipinoCard = find.text('Filipino').first;
+    await tester.ensureVisible(filipinoCard);
+    await tester.tap(filipinoCard);
     await tester.pumpAndSettle();
 
-    // Verify Filipino quizzes are now visible
+    // Verify Filipino quizzes are now visible on the opened SubjectQuizzesScreen
     expect(find.text('Quiz 1: Wika at Balarila'), findsOneWidget);
     expect(find.text('LIVE'), findsWidgets);
     expect(find.text('Stop'), findsWidgets);
-    expect(find.text('Edit'), findsWidgets);
+
+    // Verify three vertical dots menu contains Edit, Stats, Backup, and Delete
+    final moreMenuBtn = find.byIcon(Icons.more_vert).first;
+    expect(moreMenuBtn, findsOneWidget);
+    await tester.tap(moreMenuBtn);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Edit'), findsOneWidget);
+    expect(find.text('Stats'), findsOneWidget);
+    expect(find.text('Backup'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+
+    // Dismiss popup menu
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
 
     // Test Stop button
     final stopBtn = find.text('Stop').first;
@@ -172,18 +188,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('LIVE'), findsWidgets);
 
-    // Test Collapsible Subject Cards: tap Filipino header again to collapse
-    await tester.tap(filipinoHeader);
-    await tester.pumpAndSettle();
-
-    // Filipino quizzes should now be hidden again
-    expect(find.text('Quiz 1: Wika at Balarila'), findsNothing);
-
-    // Expand again to test timer dialog
-    await tester.tap(filipinoHeader);
-    await tester.pumpAndSettle();
-    expect(find.text('Quiz 1: Wika at Balarila'), findsOneWidget);
-
     // Test Timer dialog: tap timer pill
     final timerEditBtn = find.byIcon(Icons.timer_outlined).first;
     await tester.ensureVisible(timerEditBtn);
@@ -194,6 +198,14 @@ void main() {
     expect(find.text('15m'), findsWidgets);
     await tester.tap(find.text('Save Timer'));
     await tester.pumpAndSettle();
+
+    // Test Back button returns to MyLibraryScreen
+    final backBtn = find.byType(BackButton);
+    expect(backBtn, findsOneWidget);
+    await tester.tap(backBtn);
+    await tester.pumpAndSettle();
+    expect(find.text("Maria Santos's Library"), findsOneWidget);
+    expect(find.text('Quiz 1: Wika at Balarila'), findsNothing);
   });
 
   testWidgets('StudyHomeScreen displays created quiz subject cards with Practice, Flashcards, and Take Quiz', (WidgetTester tester) async {
@@ -223,10 +235,10 @@ void main() {
     expect(find.textContaining('SUBJECT QUIZ CARDS'), findsOneWidget);
     expect(find.text('Study or take created quizzes'), findsOneWidget);
 
-    // Verify Practice, Flashcards, and Take Quiz buttons exist
+    // Verify Practice and Take Quiz buttons exist for exams (Flashcards removed from regular exams)
     expect(find.text('Practice'), findsWidgets);
-    expect(find.text('Flashcards'), findsWidgets);
     expect(find.text('Take Quiz'), findsWidgets);
+    expect(find.text('Flashcards'), findsNothing);
 
     // Test collapsing a subject card in Study Mode
     final hideBtn = find.byTooltip('Hide quizzes').first;
@@ -575,5 +587,314 @@ void main() {
     await tester.tap(find.text('Close'));
     await tester.pumpAndSettle();
   });
+
+  testWidgets('FlashcardsScreen Type-in Quiz supports typing answer, validates correct/incorrect, and allows Pass to proceed without typing', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(500, 1000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final questions = [
+      Question(
+        id: 'q1',
+        topicId: 'flashcards',
+        subjectId: 's1',
+        category: 'History',
+        questionText: 'When was the Declaration of Independence adopted?',
+        questionType: QuestionType.multipleChoice,
+        difficulty: Difficulty.easy,
+        explanation: 'Signed in Philadelphia',
+        reference: '',
+        choices: [
+          QuestionChoice(
+            id: 'c1',
+            questionId: 'q1',
+            choiceText: 'July 4, 1776',
+            isCorrect: true,
+            sortOrder: 0,
+          ),
+        ],
+        points: 1,
+      ),
+      Question(
+        id: 'q2',
+        topicId: 'flashcards',
+        subjectId: 's1',
+        category: 'History',
+        questionText: 'Who was the first president of the United States?',
+        questionType: QuestionType.multipleChoice,
+        difficulty: Difficulty.easy,
+        explanation: 'Elected in 1789',
+        reference: '',
+        choices: [
+          QuestionChoice(
+            id: 'c2',
+            questionId: 'q2',
+            choiceText: 'George Washington',
+            isCorrect: true,
+            sortOrder: 0,
+          ),
+        ],
+        points: 1,
+      ),
+    ];
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: FlashcardsScreen(
+            questions: questions,
+            initialMode: FlashcardStudyMode.quiz,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify opened directly in Type-in Quiz mode (no mid-session switcher)
+    expect(find.text('Type-in Quiz'), findsOneWidget);
+    expect(find.text('QUESTION / PROMPT'), findsOneWidget);
+    expect(find.text('When was the Declaration of Independence adopted?'), findsOneWidget);
+    expect(find.text('Type the answer on the back of the card:'), findsOneWidget);
+    expect(find.text('Pass'), findsOneWidget);
+    expect(find.text('Check Answer'), findsOneWidget);
+
+    // Enter wrong answer in text field
+    final textField = find.byType(TextField);
+    expect(textField, findsOneWidget);
+    await tester.enterText(textField, 'August 1945');
+    await tester.pumpAndSettle();
+
+    // Tap Check Answer
+    await tester.tap(find.text('Check Answer'));
+    await tester.pumpAndSettle();
+
+    // Verify incorrect feedback card with user's answer and correct answer
+    expect(find.text('Incorrect ❌'), findsOneWidget);
+    expect(find.text('Your Answer: "August 1945"'), findsOneWidget);
+    expect(find.text('July 4, 1776'), findsOneWidget);
+    expect(find.text('Proceed to Next Card ➔'), findsOneWidget);
+
+    // Proceed to Card 2
+    await tester.tap(find.text('Proceed to Next Card ➔'));
+    await tester.pumpAndSettle();
+
+    // Card 2
+    expect(find.text('2/2'), findsOneWidget);
+    expect(find.text('Who was the first president of the United States?'), findsOneWidget);
+
+    // Test Pass button on Card 2 (allows proceeding without typing answer)
+    final passBtn = find.text('Pass');
+    expect(passBtn, findsOneWidget);
+    await tester.tap(passBtn);
+    await tester.pumpAndSettle();
+
+    // Verify Passed feedback with correct answer shown
+    expect(find.text('Passed / Skipped ⚠️'), findsOneWidget);
+    expect(find.text('George Washington'), findsOneWidget);
+    expect(find.text('Finish Deck 🏁'), findsOneWidget);
+
+    // Tap Finish Deck
+    await tester.tap(find.text('Finish Deck 🏁'));
+    await tester.pumpAndSettle();
+
+    // Verify Deck Completed screen
+    expect(find.text('Deck Completed!'), findsOneWidget);
+    expect(find.text('Study Deck Again (Type Quiz)'), findsOneWidget);
+    expect(find.text('Switch to Card Flip Review'), findsOneWidget);
+  });
+
+  testWidgets('StudyHomeScreen displays FLASHCARDS badge and outside Flip Cards & Type Quiz buttons without Take Quiz on flashcard decks', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final examService = container.read(examServiceProvider);
+    await examService.publishExam(
+      Exam(
+        id: 'deck_sample_vocab',
+        creatorId: 'maker',
+        title: 'Biology Terminology',
+        subject: 'General Science',
+        description: 'Personal study flashcard deck with 2 cards.\n<!--type:flashcard-->',
+        code: 'BIO999',
+        status: ExamStatus.published,
+        createdAt: DateTime.now(),
+        questions: [
+          Question(
+            id: 'q_fc_1',
+            topicId: 'flashcards',
+            subjectId: 'science',
+            category: 'General Science',
+            questionText: 'Powerhouse of the cell',
+            questionType: QuestionType.multipleChoice,
+            choices: [
+              QuestionChoice(
+                id: 'c1',
+                questionId: 'q_fc_1',
+                choiceText: 'Mitochondria',
+                isCorrect: true,
+              ),
+            ],
+          ),
+          Question(
+            id: 'q_fc_2',
+            topicId: 'flashcards',
+            subjectId: 'science',
+            category: 'General Science',
+            questionText: 'Plant cell wall component',
+            questionType: QuestionType.multipleChoice,
+            choices: [
+              QuestionChoice(
+                id: 'c2',
+                questionId: 'q_fc_2',
+                choiceText: 'Cellulose',
+                isCorrect: true,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: StudyHomeScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify title rendered
+    expect(find.text('Biology Terminology'), findsOneWidget);
+
+    // Verify FLASHCARDS badge is rendered
+    expect(find.text('FLASHCARDS'), findsOneWidget);
+
+    // Verify outside study buttons are rendered directly
+    expect(find.text('Flip Cards'), findsOneWidget);
+    expect(find.text('Type Quiz'), findsOneWidget);
+
+    // Verify "Take Quiz" and "Practice" buttons are NOT shown for this flashcard deck
+    expect(find.text('Take Quiz'), findsNothing);
+    expect(find.text('Practice'), findsNothing);
+
+    // Verify Dropdown filter allows selecting subject and re-selecting All Subjects
+    final dropdown = find.byType(DropdownButton<String>);
+    expect(dropdown, findsOneWidget);
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+
+    // Select General Science from dropdown
+    final scienceItem = find.textContaining('General Science').last;
+    await tester.tap(scienceItem);
+    await tester.pumpAndSettle();
+
+    // Tap dropdown again
+    await tester.tap(dropdown);
+    await tester.pumpAndSettle();
+
+    // Re-select All Subjects
+    final allItem = find.textContaining('All Subjects').last;
+    await tester.tap(allItem);
+    await tester.pumpAndSettle();
+
+    // Verified: All Subjects filter is successfully restored!
+    expect(container.read(studyControllerProvider).selectedSubjectId, isNull);
+  });
+
+  testWidgets('SubjectQuizzesScreen editing a flashcard deck opens CreateFlashcardSheet instead of ExamMakerScreen', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    final examService = container.read(examServiceProvider);
+    examService.seedDefaultExamsForTesting();
+
+    // Create a flashcard deck in Science
+    final flashcardDeck = Exam(
+      id: 'test_fc_deck_1',
+      creatorId: 'maker_1',
+      title: 'Science Concepts Deck',
+      subject: 'Science',
+      description: 'Flashcard study deck\n<!--type:flashcard-->',
+      code: 'FC1234',
+      status: ExamStatus.published,
+      questions: [
+        const Question(
+          id: 'q_fc_test_1',
+          topicId: 'flashcards',
+          subjectId: 'Science',
+          category: 'Science',
+          questionText: 'What is H2O?',
+          questionType: QuestionType.multipleChoice,
+          difficulty: Difficulty.medium,
+          explanation: 'Water',
+          reference: '',
+          choices: [
+            QuestionChoice(
+              id: 'c_1',
+              questionId: 'q_fc_test_1',
+              choiceText: 'Water',
+              isCorrect: true,
+              sortOrder: 0,
+            ),
+          ],
+        ),
+      ],
+      createdAt: DateTime.now(),
+    );
+    await examService.publishExam(flashcardDeck);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: SubjectQuizzesScreen(subjectName: 'Science'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Science Concepts Deck'), findsOneWidget);
+    expect(find.text('FLASHCARDS'), findsOneWidget);
+
+    // Tap 3-dots menu on flashcard deck
+    final moreBtn = find.byIcon(Icons.more_vert).last;
+    await tester.tap(moreBtn);
+    await tester.pumpAndSettle();
+
+    // Tap Edit
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+
+    // Verify it opened CreateFlashcardSheet with "Edit Flashcard Deck", NOT ExamMakerScreen!
+    expect(find.text('Edit Flashcard Deck'), findsOneWidget);
+    expect(find.text('Update front & back study cards for "Science Concepts Deck"'), findsOneWidget);
+    expect(find.text('What is H2O?'), findsOneWidget);
+    expect(find.text('Water'), findsOneWidget);
+
+    // Close sheet
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+  });
 }
+
 

@@ -18,6 +18,7 @@ import '../../views/screens/exam/exam_play_screen.dart';
 import '../../views/screens/exam/exam_participant_result_screen.dart';
 import '../../views/screens/exam/exam_dashboard_screen.dart';
 import '../../views/screens/library/my_library_screen.dart';
+import '../../views/screens/library/subject_quizzes_screen.dart';
 import '../../views/screens/auth/username_setup_screen.dart';
 import '../../views/screens/splash/splash_screen.dart';
 
@@ -52,6 +53,15 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/library',
       builder: (context, state) => const MyLibraryScreen(),
+      routes: [
+        GoRoute(
+          path: 'subject',
+          builder: (context, state) {
+            final subjectName = (state.extra as String?) ?? 'General Knowledge';
+            return SubjectQuizzesScreen(subjectName: subjectName);
+          },
+        ),
+      ],
     ),
 
     // Study Mode Routes
@@ -76,6 +86,19 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'flashcards',
           builder: (context, state) {
+            if (state.extra is FlashcardArgs) {
+              final args = state.extra as FlashcardArgs;
+              return FlashcardsScreen(
+                questions: args.questions,
+                initialMode: args.mode,
+              );
+            }
+            if (state.extra is Map) {
+              final map = state.extra as Map;
+              final qs = (map['questions'] as List?)?.cast<Question>() ?? <Question>[];
+              final mode = map['mode'] as FlashcardStudyMode? ?? FlashcardStudyMode.review;
+              return FlashcardsScreen(questions: qs, initialMode: mode);
+            }
             final questions = (state.extra as List?)?.cast<Question>() ?? <Question>[];
             return FlashcardsScreen(questions: questions);
           },

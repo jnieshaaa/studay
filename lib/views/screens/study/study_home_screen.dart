@@ -10,6 +10,7 @@ import '../../../models/quiz_session_model.dart';
 import '../../../models/exam_model.dart';
 import '../../components/common/gradient_card.dart';
 import 'create_flashcard_sheet.dart';
+import 'flashcards_screen.dart';
 
 class StudyHomeScreen extends ConsumerStatefulWidget {
   const StudyHomeScreen({super.key});
@@ -52,8 +53,13 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
         ? studyState.subjects.where((s) => s.id == studyState.selectedSubjectId).firstOrNull
         : null;
 
-    final displayedSubjectNames = selectedSubjectObj != null
-        ? allSubjectNames.where((name) => name.toLowerCase() == selectedSubjectObj.name.toLowerCase()).toList()
+    final displayedSubjectNames = studyState.selectedSubjectId != null
+        ? allSubjectNames.where((name) {
+            if (selectedSubjectObj != null && name.toLowerCase() == selectedSubjectObj.name.toLowerCase()) {
+              return true;
+            }
+            return name.toLowerCase() == studyState.selectedSubjectId!.toLowerCase();
+          }).toList()
         : allSubjectNames;
 
     return Scaffold(
@@ -91,81 +97,129 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Subject Filter Selector
-              Text(
-                'SELECT SUBJECT',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                ),
+              // Clean Dropdown Subject Filter & Action Bar
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF14141E) : const Color(0xFFF4F4F8),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF28283C) : const Color(0xFFDFDFEA),
+                        ),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: studyState.selectedSubjectId ?? '__ALL__',
+                          isExpanded: true,
+                          icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.secondary, size: 28),
+                          dropdownColor: isDark ? const Color(0xFF1B1B26) : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          items: [
+                            DropdownMenuItem<String>(
+                              value: '__ALL__',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.apps_rounded,
+                                    size: 18,
+                                    color: (studyState.selectedSubjectId == null || studyState.selectedSubjectId == '__ALL__')
+                                        ? AppColors.secondary
+                                        : (isDark ? Colors.white70 : Colors.black87),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'All Subjects (${allSubjectNames.length})',
+                                    style: TextStyle(
+                                      fontWeight: (studyState.selectedSubjectId == null || studyState.selectedSubjectId == '__ALL__')
+                                          ? FontWeight.w800
+                                          : FontWeight.w600,
+                                      color: (studyState.selectedSubjectId == null || studyState.selectedSubjectId == '__ALL__')
+                                          ? AppColors.secondary
+                                          : null,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            ...allSubjectNames.map((subjName) {
+                              final subjObj = studyState.subjects.where((s) => s.name.toLowerCase() == subjName.toLowerCase()).firstOrNull;
+                              final subjId = subjObj?.id ?? subjName;
+                              final isSelected = studyState.selectedSubjectId == subjId || studyState.selectedSubjectId == subjName;
+                              final examsCount = examsBySubject[subjName]?.length ?? 0;
+                              return DropdownMenuItem<String>(
+                                value: subjId,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _getSubjectIcon(subjName),
+                                      size: 18,
+                                      color: isSelected ? AppColors.secondary : _getSubjectColor(subjName),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '$subjName ($examsCount)',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                          color: isSelected ? AppColors.secondary : null,
+                                          fontSize: 13.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          ],
+                          onChanged: (newSubjId) {
+                            final effectiveId = (newSubjId == null || newSubjId == '__ALL__') ? null : newSubjId;
+                            studyNotifier.selectSubject(effectiveId);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Quick Action 1: Create Flashcards
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.tertiary.withValues(alpha: 0.15),
+                      padding: const EdgeInsets.all(11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: AppColors.tertiary.withValues(alpha: 0.35)),
+                      ),
+                    ),
+                    icon: const Icon(Icons.style_rounded, size: 20, color: AppColors.tertiary),
+                    tooltip: 'Create Flashcards',
+                    onPressed: () => showCreateFlashcardSheet(
+                      context: context,
+                      initialSubject: selectedSubjectObj?.name,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Quick Action 2: Import Deck
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.secondary.withValues(alpha: 0.15),
+                      padding: const EdgeInsets.all(11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.35)),
+                      ),
+                    ),
+                    icon: const Icon(Icons.download_rounded, size: 20, color: AppColors.secondary),
+                    tooltip: 'Import Exam as Study Deck',
+                    onPressed: () => _showImportExamSheet(context, ref),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 44,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('All Subjects'),
-                      selected: studyState.selectedSubjectId == null,
-                      onSelected: (_) => studyNotifier.selectSubject(null),
-                      selectedColor: AppColors.primary,
-                      labelStyle: TextStyle(
-                        color: studyState.selectedSubjectId == null ? Colors.white : null,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ...studyState.subjects.map((subj) {
-                      final isSelected = studyState.selectedSubjectId == subj.id;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: ChoiceChip(
-                          label: Text(subj.name),
-                          selected: isSelected,
-                          onSelected: (_) => studyNotifier.selectSubject(subj.id),
-                          selectedColor: AppColors.secondary,
-                          labelStyle: TextStyle(
-                            color: isSelected ? Colors.white : null,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      );
-                    }),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.style, size: 16, color: Colors.white),
-                        label: const Text(
-                          '+ Create Flashcards',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
-                        ),
-                        backgroundColor: AppColors.secondary,
-                        onPressed: () => showCreateFlashcardSheet(
-                          context: context,
-                          initialSubject: selectedSubjectObj?.name,
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ActionChip(
-                        avatar: const Icon(Icons.download, size: 16, color: AppColors.secondary),
-                        label: const Text(
-                          '+ Import Exam Deck',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.secondary),
-                        ),
-                        backgroundColor: AppColors.secondary.withValues(alpha: 0.12),
-                        side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.4)),
-                        onPressed: () => _showImportExamSheet(context, ref),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
 
               // Subject Quiz Cards Header
               Row(
@@ -411,12 +465,13 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
     final totalQuestions = exams.fold(0, (sum, e) => sum + e.questions.length);
     final iconData = _getSubjectIcon(subjectName);
     final isCollapsed = _collapsedStudySubjects.contains(subjectName);
+    final bool isAllFlashcards = exams.isNotEmpty && exams.every((e) => e.isFlashcardDeck);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: GradientCard(
         padding: const EdgeInsets.all(18),
-        borderColor: _getSubjectColor(subjectName).withValues(alpha: 0.35),
+        borderColor: (isAllFlashcards ? AppColors.tertiary : _getSubjectColor(subjectName)).withValues(alpha: 0.35),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -426,10 +481,14 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: _getSubjectColor(subjectName).withValues(alpha: 0.15),
+                    color: (isAllFlashcards ? AppColors.tertiary : _getSubjectColor(subjectName)).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(iconData, color: _getSubjectColor(subjectName), size: 22),
+                  child: Icon(
+                    isAllFlashcards ? Icons.style_rounded : iconData,
+                    color: isAllFlashcards ? AppColors.tertiary : _getSubjectColor(subjectName),
+                    size: 22,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -449,15 +508,15 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: AppColors.secondary.withValues(alpha: 0.15),
+                                color: (isAllFlashcards ? AppColors.tertiary : AppColors.secondary).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'STUDY DECK',
+                              child: Text(
+                                isAllFlashcards ? 'FLASHCARD DECK' : 'STUDY DECK',
                                 style: TextStyle(
                                   fontSize: 9,
                                   fontWeight: FontWeight.w800,
-                                  color: AppColors.secondary,
+                                  color: isAllFlashcards ? AppColors.tertiary : AppColors.secondary,
                                 ),
                               ),
                             ),
@@ -465,7 +524,9 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '${exams.length} ${exams.length == 1 ? 'Quiz' : 'Quizzes'} • $totalQuestions Questions total',
+                          isAllFlashcards
+                              ? '${exams.length} ${exams.length == 1 ? 'Deck' : 'Decks'} • $totalQuestions Flashcards total'
+                              : '${exams.length} ${exams.length == 1 ? 'Quiz' : 'Quizzes'} • $totalQuestions Questions total',
                           style: TextStyle(
                             fontSize: 12,
                             color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
@@ -514,7 +575,7 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                       Icon(Icons.visibility_off_outlined, size: 14, color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
                       const SizedBox(width: 6),
                       Text(
-                        '${exams.length} ${exams.length == 1 ? 'quiz' : 'quizzes'} hidden • Tap to open and study',
+                        '${exams.length} ${exams.length == 1 ? (isAllFlashcards ? 'deck' : 'quiz') : (isAllFlashcards ? 'decks' : 'quizzes')} hidden • Tap to open and study',
                         style: TextStyle(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w600,
@@ -549,13 +610,17 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
   }
 
   Widget _buildStudyQuizTile(BuildContext context, Exam quiz, bool isDark) {
+    final isFlashcard = quiz.isFlashcardDeck;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF14141E) : const Color(0xFFF7F7FA),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? const Color(0xFF222232) : const Color(0xFFE4E4EC),
+          color: isDark
+              ? (isFlashcard ? AppColors.tertiary.withValues(alpha: 0.25) : const Color(0xFF222232))
+              : (isFlashcard ? AppColors.tertiary.withValues(alpha: 0.3) : const Color(0xFFE4E4EC)),
         ),
       ),
       child: Column(
@@ -567,14 +632,47 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      quiz.title,
-                      style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            quiz.title,
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        if (isFlashcard) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.tertiary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.tertiary.withValues(alpha: 0.35)),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.style, size: 10.5, color: AppColors.tertiary),
+                                SizedBox(width: 3.5),
+                                Text(
+                                  'FLASHCARDS',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.tertiary,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     if (quiz.description.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        quiz.description,
+                        quiz.cleanDescription.isNotEmpty ? quiz.cleanDescription : quiz.description,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -587,70 +685,109 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              // Timer chip
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2),
-                  borderRadius: BorderRadius.circular(6),
+              if (!isFlashcard) ...[
+                // Timer chip for standard timed quizzes
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.timer_outlined, size: 12, color: AppColors.secondary),
+                      const SizedBox(width: 3),
+                      Text(
+                        quiz.durationLabel,
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.timer_outlined, size: 12, color: AppColors.secondary),
-                    const SizedBox(width: 3),
-                    Text(
-                      quiz.durationLabel,
-                      style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
-                    ),
-                  ],
+              ] else ...[
+                // Card count chip for flashcard decks
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.layers_outlined, size: 12, color: AppColors.tertiary),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${quiz.questions.length} cards',
+                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 10),
-          // Actions Row: Practice, Flashcards, Take Quiz
+          // Actions Row: Flip Cards & Type Quiz for Flashcards, or Practice & Take Quiz for Exams
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
-              // 1. Practice Button (Study with explanations)
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                  side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              if (isFlashcard) ...[
+                // 1. Flip Cards (Review Mode)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.secondary),
+                    foregroundColor: AppColors.secondary,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _studyFlashcards(context, quiz, FlashcardStudyMode.review),
+                  icon: const Icon(Icons.flip_to_back_rounded, size: 14),
+                  label: const Text('Flip Cards', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
                 ),
-                onPressed: () => _practiceExam(context, quiz),
-                icon: const Icon(Icons.lightbulb_outline, size: 14, color: AppColors.secondary),
-                label: const Text('Practice', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.secondary)),
-              ),
-              // 2. Flashcards Button
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  visualDensity: VisualDensity.compact,
-                  side: BorderSide(color: AppColors.tertiary.withValues(alpha: 0.5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                // 2. Type-in Quiz (Active Recall Mode)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.tertiary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _studyFlashcards(context, quiz, FlashcardStudyMode.quiz),
+                  icon: const Icon(Icons.edit_note_rounded, size: 14),
+                  label: const Text('Type Quiz', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
                 ),
-                onPressed: () => _flashcardsExam(context, quiz),
-                icon: const Icon(Icons.style_outlined, size: 14, color: AppColors.tertiary),
-                label: const Text('Flashcards', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.tertiary)),
-              ),
-              // 3. Take Quiz Button
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  visualDensity: VisualDensity.compact,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ] else ...[
+                // 1. Practice Button (Study with explanations)
+                OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    visualDensity: VisualDensity.compact,
+                    side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _practiceExam(context, quiz),
+                  icon: const Icon(Icons.lightbulb_outline, size: 14, color: AppColors.secondary),
+                  label: const Text('Practice', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.secondary)),
                 ),
-                onPressed: () => _takeExam(context, quiz),
-                icon: const Icon(Icons.play_arrow, size: 14),
-                label: const Text('Take Quiz', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
-              ),
+                // 2. Take Quiz Button (Strictly for exams)
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: () => _takeExam(context, quiz),
+                  icon: const Icon(Icons.play_arrow, size: 14),
+                  label: const Text('Take Quiz', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
+                ),
+              ],
             ],
           ),
         ],
@@ -663,11 +800,14 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
     context.push('/study/quiz', extra: session);
   }
 
-  void _flashcardsExam(BuildContext context, Exam quiz) {
+  void _studyFlashcards(BuildContext context, Exam quiz, FlashcardStudyMode mode) {
     final questions = quiz.hasQuestionLimit
         ? (quiz.questions.toList()..shuffle()).take(quiz.questionLimit!).toList()
         : quiz.questions;
-    context.push('/study/flashcards', extra: questions);
+    context.push(
+      '/study/flashcards',
+      extra: FlashcardArgs(questions: questions, mode: mode),
+    );
   }
 
   void _takeExam(BuildContext context, Exam quiz) {

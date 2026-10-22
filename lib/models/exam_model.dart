@@ -99,6 +99,8 @@ class Exam {
     return false;
   }
 
+  bool get isScheduled => opensAt != null || closesAt != null;
+
   int get totalPoints =>
       questions.fold(0, (sum, q) => sum + (q.points > 0 ? q.points : 1));
 
@@ -154,9 +156,23 @@ class Exam {
       ? '$questionLimit of ${questions.length} Qs'
       : '${questions.length} Qs';
 
+  /// Whether this exam is created specifically as a flashcard deck
+  bool get isFlashcardDeck {
+    if (description.contains('<!--type:flashcard-->')) return true;
+    if (title.toLowerCase().contains('flashcard')) return true;
+    if (description.toLowerCase().contains('flashcard')) return true;
+    if (questions.isNotEmpty &&
+        questions.every((q) =>
+            q.topicId == 'flashcards' ||
+            (q.questionType == QuestionType.multipleChoice && q.choices.length <= 1))) {
+      return true;
+    }
+    return false;
+  }
+
   /// Clean description without any embedded metadata comments
   String get cleanDescription =>
-      description.replaceAll(RegExp(r'\s*<!--limit:\d+-->'), '').trim();
+      description.replaceAll(RegExp(r'\s*<!--(limit:\d+|type:\w+)-->'), '').trim();
 
   static int? _parseLimitFromDesc(String desc) {
     final match = RegExp(r'<!--limit:(\d+)-->').firstMatch(desc);
@@ -176,6 +192,8 @@ class Exam {
     ShowAnswersMode? showAnswers,
     DateTime? opensAt,
     DateTime? closesAt,
+    bool clearOpensAt = false,
+    bool clearClosesAt = false,
     int? maxAttemptsPerParticipant,
     int? durationMinutes,
     bool clearDuration = false,
@@ -196,8 +214,8 @@ class Exam {
       questionOrder: questionOrder ?? this.questionOrder,
       choiceOrder: choiceOrder ?? this.choiceOrder,
       showAnswers: showAnswers ?? this.showAnswers,
-      opensAt: opensAt ?? this.opensAt,
-      closesAt: closesAt ?? this.closesAt,
+      opensAt: clearOpensAt ? null : (opensAt ?? this.opensAt),
+      closesAt: clearClosesAt ? null : (closesAt ?? this.closesAt),
       maxAttemptsPerParticipant:
           maxAttemptsPerParticipant ?? this.maxAttemptsPerParticipant,
       durationMinutes: clearDuration ? null : (durationMinutes ?? this.durationMinutes),

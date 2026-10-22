@@ -9,11 +9,11 @@ import '../../../controllers/auth_controller.dart';
 import '../../../controllers/providers.dart';
 import '../../../controllers/study_controller.dart';
 import '../../../controllers/exam_maker_controller.dart';
-import '../../../controllers/exam_participant_controller.dart';
 import '../../../models/exam_model.dart';
 import '../../../services/exam_service.dart';
 import '../../components/common/gradient_card.dart';
 import '../../components/common/custom_button.dart';
+import 'subject_quizzes_screen.dart';
 
 class MyLibraryScreen extends ConsumerStatefulWidget {
   const MyLibraryScreen({super.key});
@@ -24,31 +24,17 @@ class MyLibraryScreen extends ConsumerStatefulWidget {
 
 class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
   String? _selectedSubjectFilter;
-  // All subjects start collapsed by default for a clean, uncluttered look
-  final Set<String> _expandedSubjects = {};
 
-  bool isSubjectCollapsed(String subject) => !_expandedSubjects.contains(subject);
-
-  void _toggleSubjectCollapse(String subject) {
-    setState(() {
-      if (_expandedSubjects.contains(subject)) {
-        _expandedSubjects.remove(subject);
-      } else {
-        _expandedSubjects.add(subject);
-      }
-    });
-  }
-
-  void _collapseAll() {
-    setState(() {
-      _expandedSubjects.clear();
-    });
-  }
-
-  void _expandAll(List<String> subjects) {
-    setState(() {
-      _expandedSubjects.addAll(subjects);
-    });
+  void _openSubject(BuildContext context, String subjectName) {
+    if (GoRouter.maybeOf(context) != null) {
+      context.push('/library/subject', extra: subjectName);
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => SubjectQuizzesScreen(subjectName: subjectName),
+        ),
+      );
+    }
   }
 
   @override
@@ -87,9 +73,6 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     final displayedSubjects = _selectedSubjectFilter == null
         ? subjectsList
         : subjectsList.where((s) => s == _selectedSubjectFilter).toList();
-
-    final allCollapsed = displayedSubjects.isNotEmpty &&
-        displayedSubjects.every((s) => !_expandedSubjects.contains(s));
 
     return Scaffold(
       appBar: AppBar(
@@ -153,7 +136,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Organize quizzes under Subject Cards. Creators save and control their work here.',
+                                'Organize quizzes under Subject Cards. Tap any subject to view and manage quizzes.',
                                 style: TextStyle(
                                   fontSize: 12.5,
                                   height: 1.35,
@@ -244,101 +227,94 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Subject Filter Pills & Collapse Controls
+              // Clean Subject Dropdown Filter
               if (subjectsList.isNotEmpty) ...[
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'SUBJECTS (${subjectsList.length})',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF14141E) : const Color(0xFFF4F4F8),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF28283C) : const Color(0xFFDFDFEA),
                     ),
-                    Row(
-                      children: [
-                        if (_selectedSubjectFilter != null) ...[
-                          GestureDetector(
-                            onTap: () => setState(() => _selectedSubjectFilter = null),
-                            child: const Text(
-                              'Show All',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary),
-                            ),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _selectedSubjectFilter ?? '__ALL__',
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down_rounded, color: AppColors.secondary, size: 28),
+                      dropdownColor: isDark ? const Color(0xFF1B1B26) : Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      items: [
+                        DropdownMenuItem<String>(
+                          value: '__ALL__',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.apps_rounded,
+                                size: 18,
+                                color: (_selectedSubjectFilter == null || _selectedSubjectFilter == '__ALL__')
+                                    ? AppColors.secondary
+                                    : (isDark ? Colors.white70 : Colors.black87),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'All Subjects (${allExams.length})',
+                                style: TextStyle(
+                                  fontWeight: (_selectedSubjectFilter == null || _selectedSubjectFilter == '__ALL__')
+                                      ? FontWeight.w800
+                                      : FontWeight.w600,
+                                  color: (_selectedSubjectFilter == null || _selectedSubjectFilter == '__ALL__')
+                                      ? AppColors.secondary
+                                      : null,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                        ],
-                        InkWell(
-                          onTap: () {
-                            if (allCollapsed) {
-                              _expandAll(displayedSubjects);
-                            } else {
-                              _collapseAll();
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(6),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        ),
+                        ...subjectsList.map((subj) {
+                          final count = examsBySubject[subj]?.length ?? 0;
+                          final isSelected = _selectedSubjectFilter == subj;
+                          return DropdownMenuItem<String>(
+                            value: subj,
                             child: Row(
                               children: [
                                 Icon(
-                                  allCollapsed ? Icons.unfold_more : Icons.unfold_less,
-                                  size: 16,
-                                  color: AppColors.secondary,
+                                  _getSubjectIcon(subj),
+                                  size: 18,
+                                  color: isSelected ? AppColors.secondary : _getSubjectColor(subj),
                                 ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  allCollapsed ? 'Expand All' : 'Collapse All',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '$subj ($count)',
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                      color: isSelected ? AppColors.secondary : null,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        ),
+                          );
+                        }),
                       ],
+                      onChanged: (newSubj) {
+                        setState(() {
+                          _selectedSubjectFilter =
+                              (newSubj == null || newSubj == '__ALL__') ? null : newSubj;
+                        });
+                      },
                     ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      FilterChip(
-                        label: Text('All Subjects (${allExams.length})'),
-                        selected: _selectedSubjectFilter == null,
-                        selectedColor: AppColors.secondary.withValues(alpha: 0.25),
-                        checkmarkColor: AppColors.secondary,
-                        onSelected: (_) => setState(() => _selectedSubjectFilter = null),
-                      ),
-                      const SizedBox(width: 8),
-                      ...subjectsList.map((subj) {
-                        final count = examsBySubject[subj]?.length ?? 0;
-                        final isSelected = _selectedSubjectFilter == subj;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: FilterChip(
-                            label: Text('$subj ($count)'),
-                            selected: isSelected,
-                            selectedColor: AppColors.secondary.withValues(alpha: 0.25),
-                            checkmarkColor: AppColors.secondary,
-                            onSelected: (_) {
-                              setState(() {
-                                _selectedSubjectFilter = isSelected ? null : subj;
-                              });
-                            },
-                          ),
-                        );
-                      }),
-                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 18),
               ],
 
-              // Collapsible Subject Cards
+              // Clickable Subject Cards
               if (displayedSubjects.isEmpty)
                 _buildEmptyState(context, isDark)
               else
@@ -355,7 +331,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     );
   }
 
-  /// Builds a dedicated Subject Card with dropdown toggle button
+  /// Builds a clickable Subject Card. Tapping it opens SubjectQuizzesScreen.
   Widget _buildSubjectCard(
     BuildContext context,
     String subjectName,
@@ -364,736 +340,158 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
   ) {
     final totalQuestions = exams.fold(0, (sum, e) => sum + e.questions.length);
     final iconData = _getSubjectIcon(subjectName);
-    final isCollapsed = !_expandedSubjects.contains(subjectName);
+    final subjectColor = _getSubjectColor(subjectName);
+    final liveCount = exams.where((e) => e.status == ExamStatus.published).length;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.only(bottom: 14),
       child: GradientCard(
-        padding: const EdgeInsets.all(20),
-        borderColor: _getSubjectColor(subjectName).withValues(alpha: 0.4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Subject Card Header with Dropdown Button to Hide/Show Quizzes
-            Row(
+        padding: EdgeInsets.zero,
+        borderColor: subjectColor.withValues(alpha: 0.35),
+        child: InkWell(
+          onTap: () => _openSubject(context, subjectName),
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
               children: [
+                // Subject Icon Box
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
+                    gradient: LinearGradient(
+                      colors: [
+                        subjectColor,
+                        subjectColor.withValues(alpha: 0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
                     borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: subjectColor.withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
-                  child: Icon(iconData, color: Colors.white, size: 22),
+                  child: Icon(iconData, color: Colors.white, size: 24),
                 ),
                 const SizedBox(width: 14),
+
+                // Subject Details
                 Expanded(
-                  child: InkWell(
-                    onTap: () => _toggleSubjectCollapse(subjectName),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
                               subjectName,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondary.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
+                              style: const TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
                               ),
-                              child: Text(
-                                'SUBJECT',
-                                style: const TextStyle(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.secondary,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: subjectColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'SUBJECT',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: subjectColor,
+                              ),
+                            ),
+                          ),
+                          if (liveCount > 0) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.success.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: AppColors.success.withValues(alpha: 0.3),
                                 ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.success,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '$liveCount LIVE',
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.success,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${exams.length} ${exams.length == 1 ? 'Quiz' : 'Quizzes'} • $totalQuestions Questions',
-                          style: TextStyle(
-                            fontSize: 12.5,
-                            color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // Add Quiz to this specific subject button
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary, size: 22),
-                  tooltip: 'Add new quiz to $subjectName',
-                  onPressed: () => _handleAddQuizToSubject(context, subjectName),
-                ),
-                // Share entire subject by code button
-                IconButton(
-                  icon: const Icon(Icons.share_outlined, color: AppColors.secondary, size: 21),
-                  tooltip: 'Share all "$subjectName" exams by code',
-                  onPressed: () => _showShareSubjectDialog(context, subjectName, exams),
-                ),
-                // Dropdown button to collapse/hide or expand all quizzes
-                IconButton(
-                  icon: Icon(
-                    isCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
-                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    size: 24,
-                  ),
-                  tooltip: isCollapsed ? 'Show quizzes' : 'Hide quizzes',
-                  onPressed: () => _toggleSubjectCollapse(subjectName),
-                ),
-              ],
-            ),
-
-            // When collapsed, show a compact tap-to-show helper
-            if (isCollapsed) ...[
-              const SizedBox(height: 10),
-              InkWell(
-                onTap: () => _toggleSubjectCollapse(subjectName),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF14141E) : const Color(0xFFF0F0F6),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: isDark ? const Color(0xFF222232) : const Color(0xFFE2E2EC)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.visibility_off_outlined,
-                        size: 15,
-                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                        ],
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 4),
                       Text(
-                        '${exams.length} ${exams.length == 1 ? 'quiz' : 'quizzes'} hidden • Tap to view or manage',
+                        '${exams.length} ${exams.length == 1 ? 'Quiz' : 'Quizzes'} • $totalQuestions Questions',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w500,
                           color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                         ),
                       ),
-                      const Spacer(),
-                      const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.secondary),
                     ],
                   ),
                 ),
-              ),
-            ] else ...[
-              const SizedBox(height: 16),
-              const Divider(height: 1),
-              const SizedBox(height: 16),
 
-              // Quizzes List inside this Subject Card (e.g. Quiz 1, Quiz 2)
-              ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: exams.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 12),
-                itemBuilder: (ctx, index) {
-                  final quiz = exams[index];
-                  return _buildQuizTile(context, quiz, index, isDark);
-                },
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Builds an individual quiz row with Creator Controls (Start/Stop, Timer, Take Quiz)
-  Widget _buildQuizTile(BuildContext context, Exam quiz, int index, bool isDark) {
-    final isLive = quiz.status == ExamStatus.published;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14141E) : const Color(0xFFF7F7FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark ? const Color(0xFF242436) : const Color(0xFFE6E6EE),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header: Q1 number + Full Title on top, with Live & Code badges underneath
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                // Action Buttons
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, color: AppColors.secondary, size: 20),
+                  tooltip: 'Share all "$subjectName" exams by code',
+                  onPressed: () => _showShareSubjectDialog(context, subjectName, exams),
                 ),
-                child: Center(
-                  child: Text(
-                    'Q${index + 1}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primary,
-                    ),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary, size: 21),
+                  tooltip: 'Add new quiz to $subjectName',
+                  onPressed: () => _handleAddQuizToSubject(context, subjectName),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title gets full line width
-                    Text(
-                      quiz.title,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 6),
-                    // Badges like Live and Code underneath the title
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        // Live / Stopped Indicator
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                          decoration: BoxDecoration(
-                            color: isLive
-                                ? AppColors.success.withValues(alpha: 0.15)
-                                : (isDark ? const Color(0xFF2A2A38) : const Color(0xFFE5E5ED)),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: isLive ? AppColors.success.withValues(alpha: 0.4) : Colors.transparent,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 6,
-                                height: 6,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isLive ? AppColors.success : Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                isLive ? 'LIVE' : 'STOPPED',
-                                style: TextStyle(
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
-                                  color: isLive
-                                      ? AppColors.success
-                                      : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 6-character Code pill with copy
-                        InkWell(
-                          onTap: () {
-                            Clipboard.setData(ClipboardData(text: quiz.code));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Copied Exam Code: ${quiz.code}'),
-                                duration: const Duration(seconds: 2),
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.pin, size: 12, color: AppColors.secondary),
-                                const SizedBox(width: 3),
-                                Text(
-                                  quiz.code,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0.8,
-                                    color: AppColors.secondary,
-                                  ),
-                                ),
-                                const SizedBox(width: 3),
-                                const Icon(Icons.copy, size: 11, color: AppColors.secondary),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (quiz.description.isNotEmpty) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        quiz.description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? AppColors.textTertiaryDark : AppColors.textTertiaryLight,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Creator Controls Row: Questions count, Timer button, Start/Stop toggle, Take Quiz, Dashboard
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Creator Question Limit / Sampling Control Button
-                  InkWell(
-                    onTap: () => _showEditQuestionLimitDialog(context, quiz),
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFECECF2),
                     borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: quiz.hasQuestionLimit
-                            ? AppColors.primary.withValues(alpha: 0.15)
-                            : (isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2)),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: quiz.hasQuestionLimit
-                              ? AppColors.primary.withValues(alpha: 0.4)
-                              : (isDark ? const Color(0xFF2C2C3E) : const Color(0xFFDCDCE8)),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.shuffle_rounded,
-                            size: 13,
-                            color: quiz.hasQuestionLimit
-                                ? AppColors.primary
-                                : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            quiz.questionLimitLabel,
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w700,
-                              color: quiz.hasQuestionLimit ? AppColors.primary : null,
-                            ),
-                          ),
-                          const SizedBox(width: 3),
-                          Icon(
-                            Icons.edit,
-                            size: 11,
-                            color: quiz.hasQuestionLimit
-                                ? AppColors.primary
-                                : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight),
-                          ),
-                        ],
-                      ),
-                    ),
                   ),
-                  // Creator Timer Control Button
-                  InkWell(
-                    onTap: () => _showEditTimerDialog(context, quiz),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E1E2C) : const Color(0xFFEBEBF2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: isDark ? const Color(0xFF2C2C3E) : const Color(0xFFDCDCE8),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.timer_outlined, size: 13, color: AppColors.secondary),
-                          const SizedBox(width: 4),
-                          Text(
-                            quiz.durationLabel,
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(width: 3),
-                          const Icon(Icons.edit, size: 11, color: AppColors.secondary),
-                        ],
-                      ),
-                    ),
+                  child: Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                   ),
-                ],
-              ),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Start / Stop Quiz Toggle Button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(
-                        color: isLive ? AppColors.error.withValues(alpha: 0.5) : AppColors.success.withValues(alpha: 0.6),
-                      ),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => _handleToggleStatus(context, quiz),
-                    icon: Icon(
-                      isLive ? Icons.pause_circle_outline : Icons.play_circle_outline,
-                      size: 15,
-                      color: isLive ? AppColors.error : AppColors.success,
-                    ),
-                    label: Text(
-                      isLive ? 'Stop' : 'Start',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11.5,
-                        color: isLive ? AppColors.error : AppColors.success,
-                      ),
-                    ),
-                  ),
-                  // Take Quiz Button
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => _launchQuiz(context, quiz),
-                    icon: const Icon(Icons.play_arrow, size: 15),
-                    label: const Text('Take Quiz', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5)),
-                  ),
-                  // Edit Quiz Button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => context.push('/exam/maker', extra: quiz),
-                    icon: const Icon(Icons.edit_outlined, size: 14, color: AppColors.secondary),
-                    label: const Text(
-                      'Edit',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.secondary),
-                    ),
-                  ),
-                  // Dashboard Button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => context.push('/exam/dashboard/${quiz.id}'),
-                    icon: const Icon(Icons.analytics_outlined, size: 14, color: AppColors.secondary),
-                    label: const Text(
-                      'Stats',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, color: AppColors.secondary),
-                    ),
-                  ),
-                  // Backup / Export Button
-                  OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide(color: isDark ? Colors.white24 : Colors.black26),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () => _handleBackupExam(context, quiz),
-                    icon: const Icon(Icons.share_outlined, size: 14),
-                    label: const Text(
-                      'Backup',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Toggle Active/Stopped status of the quiz
-  Future<void> _handleToggleStatus(BuildContext context, Exam quiz) async {
-    final isCurrentlyLive = quiz.status == ExamStatus.published;
-    await ref.read(examServiceProvider).toggleExamStatus(quiz.id);
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isCurrentlyLive
-                ? '"${quiz.title}" stopped. Takers cannot join while stopped.'
-                : '"${quiz.title}" started and open for participants!',
-          ),
-          backgroundColor: isCurrentlyLive ? AppColors.error : AppColors.success,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  /// Dialog to view/change quiz countdown timer
-  void _showEditTimerDialog(BuildContext context, Exam quiz) {
-    int? selectedMins = quiz.durationMinutes;
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            return AlertDialog(
-              backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Row(
-                children: [
-                  const Icon(Icons.timer_outlined, color: AppColors.secondary, size: 22),
-                  const SizedBox(width: 8),
-                  const Text('Set Quiz Timer', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Set a countdown limit for "${quiz.title}". Takers will see a live timer bar during the quiz.',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      null, // Untimed
-                      5,
-                      10,
-                      15,
-                      30,
-                      45,
-                      60,
-                    ].map((mins) {
-                      final isSelected = selectedMins == mins;
-                      final label = mins == null ? 'Untimed' : '${mins}m';
-                      return ChoiceChip(
-                        label: Text(label),
-                        selected: isSelected,
-                        selectedColor: AppColors.secondary.withValues(alpha: 0.25),
-                        checkmarkColor: AppColors.secondary,
-                        onSelected: (_) {
-                          setDialogState(() {
-                            selectedMins = mins;
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.secondary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () async {
-                    await ref.read(examServiceProvider).updateExamTimer(quiz.id, selectedMins);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            selectedMins == null
-                                ? 'Timer removed for "${quiz.title}"'
-                                : 'Timer set to ${selectedMins}m for "${quiz.title}"',
-                          ),
-                          backgroundColor: AppColors.secondary,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Save Timer'),
                 ),
               ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showEditQuestionLimitDialog(BuildContext context, Exam quiz) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    int? selectedLimit = quiz.questionLimit;
-    final customController = TextEditingController(
-      text: quiz.questionLimit != null && quiz.questionLimit! > 0
-          ? '${quiz.questionLimit}'
-          : '',
-    );
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
-                children: [
-                  Icon(Icons.shuffle_rounded, color: AppColors.primary),
-                  SizedBox(width: 8),
-                  Text('Questions Per Exam', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Set how many questions will randomly appear in "${quiz.title}" (Total in bank: ${quiz.questions.length}). Questions will never repeat.',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      null, // All
-                      10,
-                      20,
-                      25,
-                      50,
-                    ].where((n) => n == null || n < quiz.questions.length).map((limit) {
-                      final isSelected = selectedLimit == limit;
-                      final label = limit == null ? 'All (${quiz.questions.length})' : '$limit Qs';
-                      return ChoiceChip(
-                        label: Text(label),
-                        selected: isSelected,
-                        selectedColor: AppColors.primary.withValues(alpha: 0.25),
-                        checkmarkColor: AppColors.primary,
-                        onSelected: (_) {
-                          setDialogState(() {
-                            selectedLimit = limit;
-                            customController.text = limit == null ? '' : '$limit';
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: customController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Custom Item Count',
-                      hintText: 'e.g. 20',
-                      prefixIcon: const Icon(Icons.pin, size: 18),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    onChanged: (val) {
-                      final parsed = int.tryParse(val.trim());
-                      setDialogState(() {
-                        selectedLimit = (parsed != null && parsed > 0 && parsed < quiz.questions.length)
-                            ? parsed
-                            : null;
-                      });
-                    },
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: () async {
-                    final parsed = int.tryParse(customController.text.trim());
-                    final finalLimit = (parsed != null && parsed > 0 && parsed < quiz.questions.length)
-                        ? parsed
-                        : selectedLimit;
-                    await ref.read(examServiceProvider).updateExamQuestionLimit(quiz.id, finalLimit);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            finalLimit == null
-                                ? 'Exam will now show all ${quiz.questions.length} questions'
-                                : 'Exam will randomly draw $finalLimit of ${quiz.questions.length} questions (no repeats)',
-                          ),
-                          backgroundColor: AppColors.primary,
-                          duration: const Duration(seconds: 2),
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('Save Limit'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1111,7 +509,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Create your first subject and quiz now to get started.',
+              'Create a quiz or restore one using an Exam Code to begin.',
               style: TextStyle(
                 fontSize: 13,
                 color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
@@ -1148,19 +546,6 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     }
     ref.read(examMakerControllerProvider.notifier).setSubject(subjectName);
     context.push('/exam/maker');
-  }
-
-  void _launchQuiz(BuildContext context, Exam quiz) {
-    final examService = ref.read(examServiceProvider);
-    final participant = examService.joinExam(
-      code: quiz.code,
-      nickname: ref.read(authControllerProvider).currentUser?.name ?? 'Learner',
-    );
-
-    context.push(
-      '/exam/play',
-      extra: ExamParticipantParam(quiz, participant),
-    );
   }
 
   void _showProfileSheet(BuildContext context, WidgetRef ref) {
@@ -1220,29 +605,6 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
           ),
         );
       },
-    );
-  }
-
-  void _handleBackupExam(BuildContext context, Exam quiz) {
-    final jsonStr = jsonEncode(quiz.toJson());
-    Clipboard.setData(ClipboardData(text: jsonStr));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.check_circle, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Backup for "${quiz.title}" (Code: ${quiz.code}) copied to clipboard! You can paste or save it anywhere.',
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: AppColors.success,
-        duration: const Duration(seconds: 4),
-        behavior: SnackBarBehavior.floating,
-      ),
     );
   }
 
@@ -1307,85 +669,127 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // Big Unique Code Display
+                  // Big Share Code Box
                   Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppColors.secondary.withValues(alpha: 0.12),
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.secondary.withValues(alpha: 0.15),
+                          AppColors.primary.withValues(alpha: 0.10),
+                        ],
+                      ),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.secondary.withValues(alpha: 0.5)),
+                      border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
                           'UNIQUE SUBJECT SHARE CODE',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 1.1, color: AppColors.secondary),
-                        ),
-                        const SizedBox(height: 6),
-                        SelectableText(
-                          bundle.code,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5,
-                            fontFamily: 'monospace',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
                             color: AppColors.secondary,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SelectableText(
+                                bundle.subjectCode,
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.copy, color: AppColors.secondary, size: 20),
+                              tooltip: 'Copy Code',
+                              onPressed: () {
+                                Clipboard.setData(ClipboardData(text: bundle.subjectCode));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Copied Subject Code: ${bundle.subjectCode}'),
+                                    backgroundColor: AppColors.success,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 4),
-                        const Text(
-                          'Guaranteed unique & conflict-free',
-                          style: TextStyle(fontSize: 11, color: Colors.grey),
+                        Row(
+                          children: [
+                            const Icon(Icons.verified, size: 13, color: AppColors.success),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Guaranteed unique & conflict-free',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
 
-                  // Quizzes Included Preview
+                  // Quizzes Included in Bundle
                   Text(
-                    'QUIZZES INCLUDED (${exams.length}):',
-                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, letterSpacing: 0.8),
+                    'Included Quizzes (${exams.length}):',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 6),
-                  ...exams.take(4).map((e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle_outline, size: 14, color: AppColors.success),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            '${e.title} (${e.questions.length} Qs)',
-                            style: const TextStyle(fontSize: 12),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )),
-                  if (exams.length > 4)
-                    Text('+ ${exams.length - 4} more quizzes', style: const TextStyle(fontSize: 11, color: Colors.grey)),
-
-                  const SizedBox(height: 12),
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    constraints: const BoxConstraints(maxHeight: 120),
                     decoration: BoxDecoration(
-                      color: isDark ? const Color(0xFF14141E) : const Color(0xFFECECF2),
+                      color: isDark ? const Color(0xFF14141E) : const Color(0xFFF4F4F8),
                       borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: isDark ? const Color(0xFF242436) : const Color(0xFFE4E4EE)),
                     ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: AppColors.secondary),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'On Device B: Open My Library ➔ Restore Exam ➔ enter this code to make all quizzes theirs.',
-                            style: TextStyle(fontSize: 11.5, height: 1.35),
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: exams.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (c, i) {
+                        final ex = exams[i];
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${i + 1}.',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  ex.title,
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Text(
+                                '${ex.questions.length} Qs',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -1393,41 +797,43 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dlgCtx),
-              child: const Text('Close'),
-            ),
-            OutlinedButton.icon(
+            TextButton.icon(
+              icon: const Icon(Icons.data_object, size: 16),
+              label: const Text('Copy Bundle JSON'),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: bundle.bundleJson));
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Full Subject Bundle JSON copied to clipboard!'),
+                    content: Text('Copied Subject Bundle JSON to clipboard!'),
                     backgroundColor: AppColors.success,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               },
-              icon: const Icon(Icons.copy_all, size: 16),
-              label: const Text('Copy Bundle JSON'),
             ),
             ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.secondary,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text('Copy Code'),
               onPressed: () {
-                Clipboard.setData(ClipboardData(text: bundle.code));
+                Clipboard.setData(ClipboardData(text: bundle.subjectCode));
+                Navigator.pop(dlgCtx);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Subject Code "${bundle.code}" copied to clipboard!'),
+                    content: Text('Copied Subject Code: ${bundle.subjectCode}'),
                     backgroundColor: AppColors.success,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
               },
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy Code'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dlgCtx),
+              child: const Text('Close'),
             ),
           ],
         );
@@ -1439,23 +845,31 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     final codeController = TextEditingController();
     final jsonController = TextEditingController();
     bool isRestoring = false;
-    bool showJsonPaste = false;
 
     showDialog(
       context: context,
       builder: (dialogCtx) {
+        final isDark = Theme.of(dialogCtx).brightness == Brightness.dark;
         return StatefulBuilder(
-          builder: (ctx, setDialogState) {
+          builder: (stfCtx, setDialogState) {
             return AlertDialog(
-              title: const Row(
+              backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
                 children: [
-                  Icon(Icons.cloud_download, color: AppColors.secondary),
-                  SizedBox(width: 8),
-                  Flexible(
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.cloud_download_outlined, color: AppColors.secondary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
                     child: Text(
                       'Restore Exam or Entire Subject',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
                     ),
                   ),
                 ],
@@ -1467,63 +881,71 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Enter a 6-character Exam Code (e.g. 4F9K2Q) or a Unique Subject Code (e.g. SUB-ENG-7K2M) to import all exams in that category:',
-                        style: TextStyle(fontSize: 12, height: 1.35),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: codeController,
                         textCapitalization: TextCapitalization.characters,
-                        maxLength: 28,
                         decoration: InputDecoration(
-                          labelText: 'Exam Code or Subject Code',
-                          hintText: 'e.g. 4F9K2Q or SUB-ENG-7K2M...',
-                          prefixIcon: const Icon(Icons.pin, color: AppColors.secondary),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          labelText: 'Exam or Subject Code',
+                          hintText: 'e.g. 4F9K2Q or SUB-FIL-8A2F',
+                          prefixIcon: const Icon(Icons.pin, size: 20),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF14141E) : const Color(0xFFF7F7FA),
                         ),
-                        onChanged: (_) => setDialogState(() {}),
                       ),
+                      const SizedBox(height: 14),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          TextButton(
-                            onPressed: () => setDialogState(() => showJsonPaste = !showJsonPaste),
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             child: Text(
-                              showJsonPaste ? 'Hide JSON backup input' : 'Or paste backup JSON / bundle...',
-                              style: const TextStyle(fontSize: 11),
+                              'OR PASTE BACKUP JSON',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                              ),
                             ),
                           ),
+                          const Expanded(child: Divider()),
                         ],
                       ),
-                      if (showJsonPaste) ...[
-                        const SizedBox(height: 6),
-                        TextField(
-                          controller: jsonController,
-                          maxLines: 4,
-                          decoration: InputDecoration(
-                            hintText: 'Paste single exam JSON or Subject Bundle JSON here...',
-                            hintStyle: const TextStyle(fontSize: 11),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.all(10),
-                          ),
-                          onChanged: (_) => setDialogState(() {}),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: jsonController,
+                        maxLines: 3,
+                        decoration: InputDecoration(
+                          labelText: 'Paste Backup JSON',
+                          hintText: 'Paste single exam or subject bundle JSON...',
+                          prefixIcon: const Icon(Icons.code, size: 20),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF14141E) : const Color(0xFFF7F7FA),
                         ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx),
+                  onPressed: isRestoring ? null : () => Navigator.pop(dialogCtx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.secondary,
                     foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   onPressed: isRestoring
                       ? null
@@ -1534,7 +956,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                           if (code.isEmpty && rawJson.isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content: Text('Please enter an exam code, subject code, or paste backup JSON.'),
+                                content: Text('Please enter an Exam / Subject Code or paste backup JSON'),
                                 backgroundColor: AppColors.error,
                               ),
                             );

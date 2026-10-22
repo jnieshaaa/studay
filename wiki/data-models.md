@@ -40,7 +40,9 @@ The core container for maker-hosted tests.
 - `effectiveSubject`: Returns subject or `'General Knowledge'` if empty.
 - `durationLabel`: Returns `'Untimed'` or `'${durationMinutes}m'`.
 - `isExpired`: Returns `true` if `status == ExamStatus.closed` or `DateTime.now().isAfter(closesAt)`.
-- `cleanDescription`: Strips `<!--limit:X-->` HTML comment tags.
+- `isScheduled`: Returns `true` if `opensAt != null || closesAt != null`.
+- `cleanDescription`: Strips `<!--limit:X-->` and `<!--type:flashcard-->` metadata tags.
+- `isFlashcardDeck`: Returns `true` if tagged with `<!--type:flashcard-->`, named with flashcard keyword, or questions are single-choice flashcards.
 
 ---
 
@@ -128,3 +130,7 @@ Tracks an active or completed practice session.
 
 ### `UserModel` (`lib/models/user_model.dart`)
 - `id`, `name`, `email`, `createdAt`, `createdExamIds` (`List<String>`), `savedSubjectIds` (`List<String>`).
+
+### Flashcard Deck & Study Modes (`lib/views/screens/study/flashcards_screen.dart`)
+- `FlashcardStudyMode`: `review` (flip card 3D), `quiz` (type-in recall).
+- `FlashcardArgs`: `questions: List<Question>`, `mode: FlashcardStudyMode` (used for passing chosen mode from outside deck cards).

@@ -406,6 +406,38 @@ class ExamService extends ChangeNotifier {
     return updated;
   }
 
+  /// Updates or clears scheduled open and close times
+  Future<Exam> updateExamSchedule(String examId, DateTime? opensAt, DateTime? closesAt) async {
+    final exam = _examsById[examId];
+    if (exam == null) {
+      throw Exception('Quiz not found.');
+    }
+    final updated = exam.copyWith(
+      opensAt: opensAt,
+      closesAt: closesAt,
+      clearOpensAt: opensAt == null,
+      clearClosesAt: closesAt == null,
+    );
+    _examsById[examId] = updated;
+    _examsByCode[updated.code.toUpperCase()] = updated;
+    await _storage.saveCreatedExam(updated);
+    notifyListeners();
+    return updated;
+  }
+
+  /// Deletes an exam from memory and local storage
+  Future<void> deleteExam(String examId) async {
+    final exam = _examsById[examId];
+    if (exam != null) {
+      _examsById.remove(examId);
+      _examsByCode.remove(exam.code.toUpperCase());
+      _participantsByExam.remove(examId);
+      _responsesByExam.remove(examId);
+      await _storage.deleteCreatedExam(examId);
+      notifyListeners();
+    }
+  }
+
   /// Updates an existing exam (e.g. edited questions, title, settings) and persists it
   Future<Exam> updateExam(Exam updatedExam) async {
     _examsById[updatedExam.id] = updatedExam;
@@ -863,6 +895,8 @@ class SubjectBundleResult {
   final int examsCount;
   final int totalQuestions;
   final String bundleJson;
+
+  String get subjectCode => code;
 
   const SubjectBundleResult({
     required this.code,

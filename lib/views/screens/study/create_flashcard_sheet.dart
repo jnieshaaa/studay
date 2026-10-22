@@ -8,23 +8,29 @@ import '../../../models/question_model.dart';
 import '../../../controllers/providers.dart';
 import '../../../controllers/study_controller.dart';
 import '../../../controllers/auth_controller.dart';
+import 'flashcards_screen.dart';
 
-/// Shows the bottom sheet / modal dialog for creating a flashcard deck in Study Mode.
+/// Shows the bottom sheet / modal dialog for creating or editing a flashcard deck in Study Mode.
 void showCreateFlashcardSheet({
   required BuildContext context,
   String? initialSubject,
+  Exam? existingDeck,
 }) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => CreateFlashcardSheet(initialSubject: initialSubject),
+    builder: (ctx) => CreateFlashcardSheet(
+      initialSubject: initialSubject,
+      existingDeck: existingDeck,
+    ),
   );
 }
 
 class CreateFlashcardSheet extends ConsumerStatefulWidget {
   final String? initialSubject;
-  const CreateFlashcardSheet({super.key, this.initialSubject});
+  final Exam? existingDeck;
+  const CreateFlashcardSheet({super.key, this.initialSubject, this.existingDeck});
 
   @override
   ConsumerState<CreateFlashcardSheet> createState() => _CreateFlashcardSheetState();
@@ -66,18 +72,39 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
   @override
   void initState() {
     super.initState();
-    final subj = widget.initialSubject;
-    _selectedSubject = (subj != null && subj.isNotEmpty) ? subj : null;
-    _titleController = TextEditingController(
-      text: _selectedSubject != null ? '$_selectedSubject Flashcards' : 'Quick Study Flashcards',
-    );
-    _customSubjectController = TextEditingController();
+    final deck = widget.existingDeck;
+    if (deck != null) {
+      _selectedSubject = deck.effectiveSubject;
+      _titleController = TextEditingController(text: deck.title);
+      _customSubjectController = TextEditingController();
+      _cardLimit = deck.questionLimit;
+      if (deck.questions.isNotEmpty) {
+        for (final q in deck.questions) {
+          final front = q.questionText;
+          final back = q.choices.isNotEmpty ? q.choices.first.choiceText : '';
+          final hint = q.explanation.startsWith('Key Concept: ') ? '' : q.explanation;
+          _cards.add(_FlashcardDraft(front: front, back: back, hint: hint));
+        }
+      } else {
+        _cards.addAll([
+          _FlashcardDraft(),
+          _FlashcardDraft(),
+        ]);
+      }
+    } else {
+      final subj = widget.initialSubject;
+      _selectedSubject = (subj != null && subj.isNotEmpty) ? subj : null;
+      _titleController = TextEditingController(
+        text: _selectedSubject != null ? '$_selectedSubject Flashcards' : 'Quick Study Flashcards',
+      );
+      _customSubjectController = TextEditingController();
 
-    // Start with 2 empty cards
-    _cards.addAll([
-      _FlashcardDraft(),
-      _FlashcardDraft(),
-    ]);
+      // Start with 2 empty cards
+      _cards.addAll([
+        _FlashcardDraft(),
+        _FlashcardDraft(),
+      ]);
+    }
   }
 
   @override
@@ -380,23 +407,38 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
         );
       }
 
-      final deckExam = Exam(
-        id: CodeGenerator.generateId('deck'),
-        creatorId: currentUser?.id ?? currentUser?.name ?? 'maker_local',
-        title: title,
-        subject: effectiveSubject,
-        description: 'Personal study flashcard deck with ${questions.length} cards.',
-        code: '', // Code generated on publish
-        status: ExamStatus.published,
-        questionLimit: _cardLimit,
-        questions: questions,
-        createdAt: DateTime.now(),
-      );
-
-      final published = await examService.publishExam(deckExam);
+      Exam targetExam;
+      if (widget.existingDeck != null) {
+        final existing = widget.existingDeck!;
+        final updated = existing.copyWith(
+          title: title,
+          subject: effectiveSubject,
+          description:
+              'Personal study flashcard deck with ${questions.length} cards.\n<!--type:flashcard-->',
+          questionLimit: _cardLimit,
+          clearQuestionLimit: _cardLimit == null,
+          questions: questions,
+        );
+        targetExam = await examService.updateExam(updated);
+      } else {
+        final deckExam = Exam(
+          id: CodeGenerator.generateId('deck'),
+          creatorId: currentUser?.id ?? currentUser?.name ?? 'maker_local',
+          title: title,
+          subject: effectiveSubject,
+          description:
+              'Personal study flashcard deck with ${questions.length} cards.\n<!--type:flashcard-->',
+          code: '', // Code generated on publish
+          status: ExamStatus.published,
+          questionLimit: _cardLimit,
+          questions: questions,
+          createdAt: DateTime.now(),
+        );
+        targetExam = await examService.publishExam(deckExam);
+      }
 
       try {
-        await studyNotifier.syncCreatedExam(published);
+        await studyNotifier.syncCreatedExam(targetExam);
       } catch (_) {}
 
       setState(() => _isSaving = false);
@@ -412,7 +454,9 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Created Flashcard Deck "$title" (${published.questionLimitLabel}) in $effectiveSubject!',
+                    widget.existingDeck != null
+                        ? 'Updated Flashcard Deck "$title" with ${questions.length} cards!'
+                        : 'Created Flashcard Deck "$title" (${targetExam.questionLimitLabel}) in $effectiveSubject!',
                   ),
                 ),
               ],
@@ -425,14 +469,17 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
 
         if (startStudy) {
           // Immediately launch the flashcard focus study session
-          final studyQuestions = published.hasQuestionLimit
-              ? (List<Question>.from(published.questions)..shuffle()).take(published.questionLimit!).toList()
-              : published.questions;
-          context.push('/study/flashcards', extra: studyQuestions);
+          final studyQuestions = targetExam.hasQuestionLimit
+              ? (List<Question>.from(targetExam.questions)..shuffle()).take(targetExam.questionLimit!).toList()
+              : targetExam.questions;
+          context.push(
+            '/study/flashcards',
+            extra: FlashcardArgs(questions: studyQuestions, mode: FlashcardStudyMode.review),
+          );
         }
       }
 
-      return published;
+      return targetExam;
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
@@ -494,18 +541,20 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                       child: const Icon(Icons.style, color: Colors.white, size: 20),
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Create Flashcard Deck',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                            widget.existingDeck != null ? 'Edit Flashcard Deck' : 'Create Flashcard Deck',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 2),
                           Text(
-                            'Build front & back study cards to memorize concepts faster',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            widget.existingDeck != null
+                                ? 'Update front & back study cards for "${widget.existingDeck!.title}"'
+                                : 'Build front & back study cards to memorize concepts faster',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -832,7 +881,10 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Save Deck', style: TextStyle(fontWeight: FontWeight.w700)),
+                    child: Text(
+                      widget.existingDeck != null ? 'Update Deck' : 'Save Deck',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -847,9 +899,9 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const Icon(Icons.play_arrow_rounded, size: 20),
-                    label: const Text(
-                      'Save & Focus (Start Now)',
-                      style: TextStyle(fontWeight: FontWeight.w800),
+                    label: Text(
+                      widget.existingDeck != null ? 'Update & Focus (Start)' : 'Save & Focus (Start Now)',
+                      style: const TextStyle(fontWeight: FontWeight.w800),
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.secondary,

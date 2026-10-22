@@ -211,7 +211,7 @@ class StudyController extends StateNotifier<StudyState> {
   }
 
   void selectSubject(String? subjectId) {
-    if (state.selectedSubjectId == subjectId) {
+    if (subjectId == null || state.selectedSubjectId == subjectId) {
       state = state.copyWith(clearSelectedSubject: true, clearSelectedTopic: true);
     } else {
       state = state.copyWith(

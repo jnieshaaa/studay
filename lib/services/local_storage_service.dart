@@ -133,6 +133,16 @@ class LocalStorageService {
     );
   }
 
+  Future<void> deleteCreatedExam(String examId) async {
+    await init();
+    final exams = await loadCreatedExams();
+    exams.removeWhere((e) => e.id == examId);
+    await _prefs?.setString(
+      _keyCreatedExams,
+      jsonEncode(exams.map((e) => e.toJson()).toList()),
+    );
+  }
+
   // --- Custom & Imported Subjects ---
   Future<List<Subject>> loadCustomSubjects() async {
     await init();
