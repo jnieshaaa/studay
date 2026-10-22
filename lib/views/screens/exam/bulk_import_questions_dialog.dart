@@ -235,10 +235,11 @@ colors(0)''';
                     ),
                     selected: _selectedType == QuestionType.multipleChoice,
                     onSelected: (val) {
-                      if (val)
+                      if (val) {
                         setState(
                           () => _selectedType = QuestionType.multipleChoice,
                         );
+                      }
                     },
                     selectedColor: AppColors.secondary.withValues(alpha: 0.2),
                   ),
@@ -250,8 +251,9 @@ colors(0)''';
                     ),
                     selected: _selectedType == QuestionType.trueFalse,
                     onSelected: (val) {
-                      if (val)
+                      if (val) {
                         setState(() => _selectedType = QuestionType.trueFalse);
+                      }
                     },
                     selectedColor: AppColors.secondary.withValues(alpha: 0.2),
                   ),

@@ -67,8 +67,12 @@ class BulkQuestionParser {
   /// *D) Choice text (asterisk indicates correct)
   /// a) Choice text
   /// A) (standalone on its own line)
+  ///
+  /// Restricted to choice letters A-H (case-insensitive) followed by ')' or '.' with whitespace.
+  /// This prevents abbreviations like 'R.A.', 'P.D.', 'A.M.', 'U.S.', or math decimals like '3.14'
+  /// from being falsely matched as choice letters.
   static final _choiceRegex = RegExp(
-    r'^\s*([*]?)\s*\(?([A-Za-z])(?:[\.\)]|\s*-\s*|\s*:\s*|\))\s*(.*)$',
+    r'^\s*([*]?)\s*[\[\(]?([A-Ha-h])(?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)(.*)$',
   );
 
   /// Matches answer specification lines like:
@@ -133,12 +137,18 @@ class BulkQuestionParser {
       final startsWithQuestionHeader = questionHeaderRegex.hasMatch(trimmed);
       final isAnswerOrExplanation = _answerRegex.hasMatch(trimmed) || _explanationRegex.hasMatch(trimmed);
       final startsWithSubsequentChoice = RegExp(
-        r'^\s*[*]?\s*\(?[B-Zb-z](?:[\.\)]|\s*-\s*|\s*:\s*|\))\s*',
+        r'^\s*[*]?\s*[\[\(]?[B-Hb-h](?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)',
       ).hasMatch(trimmed);
 
-      final hasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(trimmed);
-      final prevHasChoiceA = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[Aa](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(blocks.last);
-      final prevHasAnyPrefixedChoice = RegExp(r'(?:^|\n)\s*[*]?\s*\(?[A-Za-z](?:[\.\)]|\s*-\s*|\s*:\s*|\))').hasMatch(blocks.last);
+      final hasChoiceA = RegExp(
+        r'(?:^|\n)\s*[*]?\s*[\[\(]?[Aa](?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)',
+      ).hasMatch(trimmed);
+      final prevHasChoiceA = RegExp(
+        r'(?:^|\n)\s*[*]?\s*[\[\(]?[Aa](?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)',
+      ).hasMatch(blocks.last);
+      final prevHasAnyPrefixedChoice = RegExp(
+        r'(?:^|\n)\s*[*]?\s*[\[\(]?[A-Ha-h](?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)',
+      ).hasMatch(blocks.last);
 
       if (startsWithQuestionHeader) {
         blocks.add(trimmed);
@@ -146,17 +156,24 @@ class BulkQuestionParser {
         // Unambiguous continuation of previous question
         blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
       } else if (hasChoiceA) {
-        if (prevHasChoiceA) {
+        final trimmedFirstLine = trimmed.split('\n').firstWhere((l) => l.trim().isNotEmpty, orElse: () => '').trim();
+        final firstLineIsChoiceA = RegExp(
+          r'^\s*[*]?\s*[\[\(]?[Aa](?:[\]\)]\s*|\.(?:\s+|$)|(?:\s*-\s*|\s*:\s*)\s*)',
+        ).hasMatch(trimmedFirstLine);
+        final prevLineCount = blocks.last.split('\n').where((l) => l.trim().isNotEmpty).length;
+
+        if (!firstLineIsChoiceA || prevHasChoiceA || prevLineCount >= 2) {
+          // It's a new question because it has its own prompt, or previous block is already complete
           blocks.add(trimmed);
         } else {
-          // Choices for previous question prompt
+          // Choices for previous 1-line question prompt
           blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
         }
       } else if (prevHasAnyPrefixedChoice) {
         // Previous block was using prefixed choices (A/B/C/D).
         // If current block has multiple lines without prefixes, treat it as a new question.
         final lineCount = trimmed.split('\n').where((l) => l.trim().isNotEmpty).length;
-        if (lineCount >= 3) {
+        if (lineCount >= 2) {
           blocks.add(trimmed);
         } else {
           blocks[blocks.length - 1] = '${blocks.last}\n\n$trimmed';
@@ -172,11 +189,12 @@ class BulkQuestionParser {
   }
 
   /// Cleans leading numbers, question prefixes like "1. ", "Question 1:", "Q1. " from prompt.
+  /// Requires whitespace after the delimiter so that decimal numbers like "3.14" are not truncated.
   static String cleanPrompt(String rawPrompt) {
     return rawPrompt
         .replaceFirst(
           RegExp(
-            r'^\s*(?:(?:Question|Item|Q)\s*)?\d+[\.\):\-]\s*',
+            r'^\s*(?:(?:Question|Item|Q)\s*)?\d+[\.\):\-]\s+',
             caseSensitive: false,
           ),
           '',
@@ -199,8 +217,11 @@ class BulkQuestionParser {
       final trimmedLines = lines.map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
       if (trimmedLines.isEmpty) continue;
 
-      // Check if this block contains prefixed choices like A), B), C), D) or a., b., etc.
-      final hasPrefixedChoices = trimmedLines.any((l) => _choiceRegex.hasMatch(l));
+      // Check if this block contains genuine prefixed choices (e.g. A and B).
+      // Requiring at least 2 choice prefixes prevents a question prompt or abbreviation
+      // starting with "A." from being falsely treated as a choice block.
+      final choiceMatchesCount = trimmedLines.where((l) => _choiceRegex.hasMatch(l)).length;
+      final hasPrefixedChoices = choiceMatchesCount >= 2;
 
       if (hasPrefixedChoices) {
         // Parser for prefixed questions (A), B), C), D)

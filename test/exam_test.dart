@@ -724,6 +724,80 @@ Explanation: Basic arithmetic.
       expect(parsed[1].explanation, 'Basic arithmetic.');
     });
 
+    test('Questions and options with R.A. and abbreviations are not truncated or misidentified', () {
+      const input = '''
+R.A. 1425 is known as what law?
+Rizal Law
+Flag Law
+National Anthem Law
+Education Act
+
+Which law is the Comprehensive Dangerous Drugs Act?
+R.A. 9165
+R.A. 1425
+R.A. 7836
+R.A. 10533
+
+Which law mandates secondary education?
+A) R.A. 6655
+B) R.A. 1425
+C) R.A. 7836
+D) R.A. 9165
+''';
+
+      final parsed = BulkQuestionParser.parse(input);
+      expect(parsed.length, 3);
+
+      // Question 1: Prompt starts with R.A. (not truncated to A.)
+      expect(parsed[0].questionText, 'R.A. 1425 is known as what law?');
+      expect(parsed[0].choices, ['Rizal Law', 'Flag Law', 'National Anthem Law', 'Education Act']);
+
+      // Question 2: Choices are R.A. in plain format (not truncated to A.)
+      expect(parsed[1].questionText, 'Which law is the Comprehensive Dangerous Drugs Act?');
+      expect(parsed[1].choices, ['R.A. 9165', 'R.A. 1425', 'R.A. 7836', 'R.A. 10533']);
+
+      // Question 3: Choices are R.A. in prefixed format (A) R.A. 6655 etc.)
+      expect(parsed[2].questionText, 'Which law mandates secondary education?');
+      expect(parsed[2].choices, ['R.A. 6655', 'R.A. 1425', 'R.A. 7836', 'R.A. 9165']);
+    });
+
+    test('Math questions with decimals are preserved without truncation', () {
+      const mathInput = '''
+3.14159 is an approximation of which mathematical constant?
+Pi
+Euler's number
+Golden ratio
+Planck's constant
+
+Solve for x: 2.5 * x = 5.0
+1.5
+2.0
+2.5
+3.0
+
+What is the area of a circle with radius 2.5?
+A) 19.625
+B) 15.70
+C) 12.50
+D) 9.81
+''';
+
+      final parsed = BulkQuestionParser.parse(mathInput);
+      expect(parsed.length, 3);
+
+      // Question 1: prompt starts with decimal 3.14159 (cleanPrompt must NOT strip "3.")
+      expect(parsed[0].questionText, "3.14159 is an approximation of which mathematical constant?");
+      expect(parsed[0].choices, ["Pi", "Euler's number", "Golden ratio", "Planck's constant"]);
+
+      // Question 2: decimals in plain format choices
+      expect(parsed[1].questionText, "Solve for x: 2.5 * x = 5.0");
+      expect(parsed[1].choices, ["1.5", "2.0", "2.5", "3.0"]);
+
+      // Question 3: decimals in prefixed choices
+      expect(parsed[2].questionText, "What is the area of a circle with radius 2.5?");
+      expect(parsed[2].choices, ["19.625", "15.70", "12.50", "9.81"]);
+    });
+
     test('Parses answers and explanations when provided', () {
       const inputWithAnswer = '''
 1. What is the capital of France?
