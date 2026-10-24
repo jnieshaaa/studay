@@ -76,18 +76,39 @@ The Maker-Participant flow is the core collaborative feature of StuDay. It allow
 - 2 to 10 pairs (`matchingPairs`):
   - `leftText`: Premise / Term.
   - `rightText`: Definition / Target match.
-- During play: The right column items are shuffled to prevent positional bias.
+- During play (`MatchingQuestionWidget`):
+  - **Sequential Readable Layout**: Each premise is displayed in order (`1. text question`, followed directly by `[Dropdown options]`).
+  - **Choices Pool**: Displays an available choices bank with letter badges (`[A]`, `[B]`, etc.) at the top.
+  - **Modifying / Removing Answers**: Takers can easily change their selected answer via the dropdown, remove individual answers with the inline `(X)` cancel button or dropdown clear item, or clear all matching answers.
 
 ---
 
-## 4. Bulk Question Parser (`lib/core/utils/bulk_question_parser.dart`)
+## 4. Bulk Question Parser & AI PDF Import
 
+### A. Bulk Question Parser (`lib/core/utils/bulk_question_parser.dart`)
 Makers can paste hundreds of raw questions at once via `BulkImportQuestionsDialog`. The parser supports:
 1. **Numbered questions**: `1. What is...`, `2) What is...`, `Q1: What is...`
 2. **Choice formats**: `A. ...`, `B) ...`, `a. ...`
 3. **Answer keys**: `Answer: A`, `Ans: True`, `Correct: B`
 4. **Matching syntax**: `Premise -> Match` or `Term = Definition`
 5. **Inline explanations**: `Explanation: ...` or `Ref: ...`
+
+### B. Automated AI Generation from PDF (`AiGeneratorScreen` & `CreateFlashcardScreen`)
+Users can upload any PDF (lecture slides, notes, chapters) to automatically generate exams or flashcards via dedicated full-screen workflows:
+1. **Full-Screen Workflow (`/ai-generator`)**: Dedicated `AiGeneratorScreen` with interactive mode selector between Exam Questions and Flashcard Decks, file picker, document preview, and preferences.
+2. **Questions Per Question Type**: The count slider represents questions *per selected question type*. Selecting 10 with Multiple Choice, True/False, and Matching checked produces **30 total questions** (10 MCQ + 10 T/F + 10 Matching). The UI dynamically renders an interactive composition breakdown indicator.
+3. **Transparent Client-Safe Execution**: Never displays developer API key fields or configuration steps to clients. Silently resolves keys via background environment variables (`.env`) with automatic candidate model fallbacks (`gemini-1.5-flash`, `gemini-1.5-flash-latest`, `gemini-2.0-flash`, `gemini-pro`).
+4. **Smart On-Device Extractor Fallback**: If Cloud Gemini is offline, restricted, or unconfigured, the app automatically engages on-device natural language heuristic extraction, generating the full set of MCQs, True/False, and Matching items locally with 0 network calls.
+5. **Structural Document Noise Filtering (`isStructuralNoise` & `stripStructuralPrefix`)**: Automatically filters out document layout markers (`Part 1`, `Part 2`, `Chapter 3`, `Module 4`, `Section X`, `Table of Contents`, `Overview`, etc.) so questions test substantive educational concepts rather than document layout.
+6. **Pedagogical Question Diversity Across Types**: Prevents repetitive questions by utilizing distinct generation pipelines for each question type:
+   - **Multiple Choice**: Alternates between Term Identification, Definition Selection, and Factual Comprehension with 4 distinct plausible distractors.
+   - **True / False**: Evaluates authentic factual principles and claims from `extractFactsFromText`, using contrasting statement generation (`_createContrastingStatement`) for realistic negations rather than mechanical term swapping.
+   - **Matching Type**: Pairs distinct key concepts with clean, concise definitions without duplicating MCQ prompts.
+7. **Token-Saver Caching & Invalidation Safeguard**:
+   - Extracted document text is fingerprinted using SHA-256 (`computeDocumentHash`) under versioned `ai_v2_` keys.
+   - Runtime validation automatically purges and regenerates any stale cached questions that contain structural noise.
+8. **PDF Text Extraction**: Uses `PdfExtractor` (`syncfusion_flutter_pdf` on-device).
+9. **Creator Review Screens**: Generated questions are seamlessly preloaded into `ExamMakerScreen` (`/exam/maker`), and generated flashcards into `CreateFlashcardScreen` (`/study/create-flashcard`), ready to review, customize, or save.
 
 ---
 

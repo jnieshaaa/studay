@@ -237,7 +237,7 @@ class ExamSectionQuestionsScreen extends ConsumerWidget {
                                 ],
                                 Text(
                                   q.questionText,
-                                  maxLines: 2,
+                                  maxLines: q.questionType == QuestionType.matching ? 4 : 2,
                                   overflow: TextOverflow.ellipsis,
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                                 ),
@@ -305,28 +305,9 @@ class ExamSectionQuestionsScreen extends ConsumerWidget {
                                     );
                                   }),
                                 ] else if (q.questionType == QuestionType.matching) ...[
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 4,
-                                    children: q.matchingPairs.map((pair) {
-                                      return Container(
-                                        constraints: const BoxConstraints(maxWidth: 180),
-                                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                        decoration: BoxDecoration(
-                                          color: isDark ? Colors.white10 : Colors.black12,
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(
-                                          '${pair.leftText} ➔ ${pair.rightText}',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
+                                  // For Matching Type, only display the prompt question on the card
                                 ],
-                                if (q.explanation.trim().isNotEmpty) ...[
+                                if (q.questionType != QuestionType.matching && q.explanation.trim().isNotEmpty) ...[
                                   const SizedBox(height: 6),
                                   Text(
                                     '💡 ${q.explanation.trim()}',

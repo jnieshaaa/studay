@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/legacy.dart';
 import '../services/local_storage_service.dart';
 import '../services/exam_service.dart';
 import '../services/supabase_exam_service.dart';
+import '../services/ai_generator_service.dart';
 
 final localStorageServiceProvider = Provider<LocalStorageService>((ref) {
   return LocalStorageService();
@@ -16,5 +17,10 @@ final examServiceProvider = ChangeNotifierProvider<ExamService>((ref) {
   final storage = ref.watch(localStorageServiceProvider);
   final supabase = ref.watch(supabaseExamServiceProvider);
   return ExamService(storage, supabase: supabase);
+});
+
+final aiGeneratorServiceProvider = Provider<AiGeneratorService>((ref) {
+  final storage = ref.watch(localStorageServiceProvider);
+  return AiGeneratorService(storage);
 });
 

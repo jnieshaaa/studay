@@ -8,6 +8,7 @@ import '../../../controllers/auth_controller.dart';
 import '../../../models/exam_model.dart';
 import '../../components/common/gradient_card.dart';
 import '../../components/common/custom_button.dart';
+import '../../components/common/ai_pdf_import_dialog.dart';
 
 class ExamHomeScreen extends ConsumerWidget {
   const ExamHomeScreen({super.key});
@@ -23,6 +24,30 @@ class ExamHomeScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Exam Mode', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF6366F1)),
+            tooltip: 'Create Exam from PDF',
+            onPressed: () {
+              AiPdfImportDialog.show(
+                context,
+                isFlashcardMode: false,
+                onQuestionsGenerated: (questions) {
+                  context.push(
+                    '/exam/maker',
+                    extra: ExamMakerArgs(initialQuestions: questions),
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Generated ${questions.length} questions from PDF with Gemini AI!'),
+                      backgroundColor: AppColors.success,
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         child: ResponsiveContainer(
@@ -158,6 +183,97 @@ class ExamHomeScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+
+              // AI Exam Generator Card
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.6) : const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF4338CA) : const Color(0xFFC7D2FE),
+                    width: 1.2,
+                  ),
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      AiPdfImportDialog.show(
+                        context,
+                        isFlashcardMode: false,
+                        onQuestionsGenerated: (questions) {
+                          context.push(
+                            '/exam/maker',
+                            extra: ExamMakerArgs(initialQuestions: questions),
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Generated ${questions.length} questions from PDF with Gemini AI!'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        },
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    const Text(
+                                      'Create Exam from PDF',
+                                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text(
+                                        'AI POWERED',
+                                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Color(0xFF6366F1)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Upload syllabus, notes, or slides to auto-formulate MCQ, True/False & Matching questions.',
+                                  style: TextStyle(fontSize: 11.5, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Color(0xFF6366F1)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(height: 28),
 
               // Active / Published Exams
@@ -182,7 +298,6 @@ class ExamHomeScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -201,18 +316,26 @@ class ExamHomeScreen extends ConsumerWidget {
                                   ),
                                 ),
                               ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.success.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  exam.effectiveSubject,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.success,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.success.withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      exam.effectiveSubject,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.success,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

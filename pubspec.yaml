@@ -39,6 +39,10 @@ dependencies:
   supabase_flutter: ^2.17.2
   shared_preferences: ^2.5.5
   flutter_dotenv: ^5.2.1
+  file_picker: ^8.1.7
+  syncfusion_flutter_pdf: ^28.2.3
+  google_generative_ai: ^0.4.4
+  crypto: ^3.0.6
 
 dev_dependencies:
   flutter_test:

@@ -19,6 +19,8 @@ The primary offline persistence engine using `shared_preferences`.
 | `_keyCurrentUser` | `'quizz_current_user_v2'` | Active user profile | JSON Object of `UserModel` |
 | `_keyUsersList` | `'quizz_users_list_v2'` | Saved user accounts for fast switching | JSON Array of `UserModel` |
 | `_keySubjectBundles` | `'quizz_subject_bundles_v2'` | Custom imported question bundles | JSON Array of bundle records |
+| `_keyGeminiApiKey` | `'quizz_gemini_api_key_v2'` | Stored user Gemini API key | String |
+| `_keyAiContentCache` | `'quizz_ai_content_cache_v2'` | Cryptographic cache of AI generated content | JSON Map of `cacheKey -> jsonPayload` |
 
 ### Legacy Cleansing Mechanism
 When loading questions via `loadQuestions()`, the service automatically filters out legacy mock IDs (`q_fil_1`, `q_fil_2`, `q_eng_1`, etc.) to prevent duplicate or conflicting sample data across app updates.
@@ -67,3 +69,26 @@ Provides initial out-of-the-box content for first launch:
   - Multiple Choice with single correct answer.
   - True/False with explanations.
   - Matching Type pairs (e.g. Science terms and definitions).
+
+---
+
+## 5. `AiGeneratorService` (`lib/services/ai_generator_service.dart`) & `PdfExtractor` (`lib/core/utils/pdf_extractor.dart`)
+
+- **`PdfExtractor`**:
+  - Uses `file_picker` to select `.pdf` documents and `syncfusion_flutter_pdf` to extract textual content on-device.
+  - Returns `ExtractedPdfData(fileName, text, pageCount)`.
+- **`AiGeneratorService`**:
+  - Uses Google Gemini 1.5 Flash (`google_generative_ai`).
+  - Resolves API key hierarchically: explicit override $\to$ `LocalStorageService._keyGeminiApiKey` $\to$ `.env['GEMINI_API_KEY']`.
+  - **`generateQuestionsFromText`**: Outputs structured `Question` items (MCQ, True/False, Matching) with answer keys and explanations.
+  - **`generateFlashcardsFromText`**: Outputs flashcard draft pairs (`front`, `back`, `hint`).
+- **Cryptographic Token-Saver Cache**:
+  - Automatically computes a deterministic SHA-256 fingerprint of the extracted document text (`computeDocumentHash`).
+  - Generates parameter-aware cache keys: `ai_${mode}_${docHash}_${count}_$typeKey`.
+  - On duplicate document uploads, offers instant loading (0 tokens, 0 latency, 0 API calls).
+  - Users can also bypass cache via `skipCache: true` ("Generate New Batch") when fresh questions or cards are desired.
+- **Smart On-Device Document Extractor (Offline / Cloud Fallback)**:
+  - Methods: `extractConceptsFromText`, `generateQuestionsLocally`, `generateFlashcardsLocally`.
+  - Automatically activates if Google Gemini API is blocked, unconfigured, network is offline, or rate-limited.
+  - Performs on-device heuristic natural language concept/definition extraction to produce MCQs (with distractors), True/False statements, Matching pairs, and Flashcards directly from document text with 0 network calls and 0 token usage.
+

@@ -10,6 +10,7 @@ import '../../../models/quiz_session_model.dart';
 import '../../components/common/gradient_card.dart';
 import '../../components/common/custom_button.dart';
 import '../../components/common/stat_card.dart';
+import '../../components/common/ai_study_generator_modal.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -86,17 +87,16 @@ class HomeScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Top Brand Header
+                // Top Brand Header (Responsive & Clean)
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Flexible(
+                    // Brand Logo & Title (Expanded to prevent any overflow)
+                    Expanded(
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
-                            width: 42,
-                            height: 42,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: isDark ? const Color(0xFF1F1F2C) : const Color(0xFFECECF2),
                               borderRadius: BorderRadius.circular(12),
@@ -108,15 +108,16 @@ class HomeScreen extends ConsumerWidget {
                               size: 22,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Flexible(
+                          const SizedBox(width: 10),
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
                                   'Studay',
                                   style: TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 20,
                                     fontWeight: FontWeight.w900,
                                     letterSpacing: -0.5,
                                     color: textPrimary,
@@ -125,10 +126,12 @@ class HomeScreen extends ConsumerWidget {
                                 Text(
                                   'Creator Dashboard',
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 11.5,
                                     fontWeight: FontWeight.w600,
                                     color: textSecondary,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -138,24 +141,56 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(width: 8),
                     // Action controls: My Library & User Account
-                    Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            side: BorderSide(color: borderColor),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        if (isWide) ...[
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6366F1),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              elevation: 0,
+                            ),
+                            onPressed: () => showAiStudyGeneratorModal(context, ref),
+                            icon: const Icon(Icons.auto_awesome, size: 14),
+                            label: const Text(
+                              'AI PDF',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                            ),
                           ),
-                          onPressed: () => context.push('/library'),
-                          icon: Icon(Icons.collections_bookmark_outlined, size: 15, color: textPrimary),
-                          label: Text(
-                            'My Library',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textPrimary),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              side: BorderSide(color: borderColor),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                            onPressed: () => context.push('/library'),
+                            icon: Icon(Icons.collections_bookmark_outlined, size: 15, color: textPrimary),
+                            label: Text(
+                              'My Library',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textPrimary),
+                            ),
                           ),
-                        ),
-                        _buildUserChip(context, ref, authState.currentUser),
+                        ] else ...[
+                          IconButton(
+                            tooltip: 'My Library',
+                            icon: Icon(Icons.collections_bookmark_outlined, size: 20, color: textPrimary),
+                            style: IconButton.styleFrom(
+                              backgroundColor: isDark ? const Color(0xFF1B1B27) : const Color(0xFFEFEFF5),
+                              padding: const EdgeInsets.all(8),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: borderColor),
+                              ),
+                            ),
+                            onPressed: () => context.push('/library'),
+                          ),
+                        ],
+                        const SizedBox(width: 8),
+                        _buildUserChip(context, ref, authState.currentUser, isWide: isWide),
                       ],
                     ),
                   ],
@@ -220,7 +255,11 @@ class HomeScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
+
+                // Prominent AI PDF Generator Feature Card
+                _buildAiGeneratorCard(context, ref, isDark),
+                const SizedBox(height: 18),
 
                 // Two Modes: Responsive Layout (Side-by-side on wide screens, Stack on mobile)
                 if (isWide)
@@ -298,6 +337,110 @@ class HomeScreen extends ConsumerWidget {
                   onPressed: () => context.push('/exam/join'),
                 ),
                 const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAiGeneratorCard(BuildContext context, WidgetRef ref, bool isDark) {
+    final borderColor = isDark ? const Color(0xFF4338CA) : const Color(0xFFC7D2FE);
+    final bgColor = isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.6) : const Color(0xFFEEF2FF);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: borderColor, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withValues(alpha: isDark ? 0.25 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => showAiStudyGeneratorModal(context, ref),
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          const Text(
+                            'AI Study Generator',
+                            style: TextStyle(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                              ),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              'GEMINI AI',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Upload PDF documents, slides, or notes to auto-generate exam questions and flashcard decks.',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          color: isDark ? const Color(0xFFC7D2FE) : const Color(0xFF4338CA),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Color(0xFF6366F1)),
               ],
             ),
           ),
@@ -450,16 +593,17 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildUserChip(BuildContext context, WidgetRef ref, UserModel? user) {
+  Widget _buildUserChip(BuildContext context, WidgetRef ref, UserModel? user, {bool isWide = true}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final borderColor = isDark ? const Color(0xFF28283A) : const Color(0xFFE4E4EC);
 
     if (user != null) {
+      final firstName = user.name.isNotEmpty ? user.name.split(' ').first : 'User';
       return InkWell(
         onTap: () => _showAccountSheet(context, ref, user),
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          padding: EdgeInsets.symmetric(horizontal: isWide ? 10 : 8, vertical: 6),
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF1B1B27) : const Color(0xFFEFEFF5),
             borderRadius: BorderRadius.circular(12),
@@ -481,11 +625,16 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              Text(
-                user.name.split(' ').first,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: isWide ? 100 : 70),
+                child: Text(
+                  firstName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                ),
               ),
-              const SizedBox(width: 4),
+              const SizedBox(width: 2),
               Icon(Icons.arrow_drop_down, size: 16, color: isDark ? const Color(0xFF8E8EA2) : const Color(0xFF707084)),
             ],
           ),

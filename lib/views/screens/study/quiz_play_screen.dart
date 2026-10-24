@@ -181,6 +181,7 @@ class QuizPlayScreen extends ConsumerWidget {
                       onSelectLeft: controller.selectMatchingLeft,
                       onConnectRight: controller.connectMatchingRight,
                       onRemovePair: controller.removeMatchingPair,
+                      onPairChanged: controller.setMatchingPair,
                     ),
                   ] else ...[
                     // Multiple Choice & True/False Tiles

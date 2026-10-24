@@ -8,11 +8,11 @@ import '../../../core/utils/responsive.dart';
 import '../../../controllers/auth_controller.dart';
 import '../../../controllers/providers.dart';
 import '../../../controllers/study_controller.dart';
-import '../../../controllers/exam_maker_controller.dart';
 import '../../../models/exam_model.dart';
 import '../../../services/exam_service.dart';
 import '../../components/common/gradient_card.dart';
 import '../../components/common/custom_button.dart';
+import '../../components/common/ai_study_generator_modal.dart';
 import 'subject_quizzes_screen.dart';
 
 class MyLibraryScreen extends ConsumerStatefulWidget {
@@ -78,6 +78,11 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
       appBar: AppBar(
         title: const Text('My Library', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF6366F1)),
+            tooltip: 'AI Study Generator',
+            onPressed: () => showAiStudyGeneratorModal(context, ref),
+          ),
           if (user != null)
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -151,39 +156,51 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                     const SizedBox(height: 16),
 
                     // Row 2: Action Buttons
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
                       children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.secondary,
-                              side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () => _showRestoreExamDialog(context),
-                            icon: const Icon(Icons.cloud_download_outlined, size: 16),
-                            label: const Text(
-                              'Restore Exam',
-                              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-                            ),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.secondary,
+                            side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => _showRestoreExamDialog(context),
+                          icon: const Icon(Icons.cloud_download_outlined, size: 16),
+                          label: const Text(
+                            'Restore Exam',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.secondary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () => _handleCreateQuiz(context),
-                            icon: const Icon(Icons.add, size: 18),
-                            label: const Text(
-                              'New Quiz',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                            ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF6366F1),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            elevation: 0,
+                          ),
+                          onPressed: () => showAiStudyGeneratorModal(context, ref),
+                          icon: const Icon(Icons.auto_awesome, size: 15),
+                          label: const Text(
+                            'AI PDF Generator',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.secondary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          onPressed: () => _handleCreateQuiz(context),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text(
+                            'New Quiz',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                           ),
                         ),
                       ],
@@ -338,7 +355,6 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     List<Exam> exams,
     bool isDark,
   ) {
-    final totalQuestions = exams.fold(0, (sum, e) => sum + e.questions.length);
     final iconData = _getSubjectIcon(subjectName);
     final subjectColor = _getSubjectColor(subjectName);
     final liveCount = exams.where((e) => e.status == ExamStatus.published).length;
@@ -350,6 +366,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
         borderColor: subjectColor.withValues(alpha: 0.35),
         child: InkWell(
           onTap: () => _openSubject(context, subjectName),
+          onLongPress: () => _showShareSubjectDialog(context, subjectName, exams),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
             padding: const EdgeInsets.all(18),
@@ -380,24 +397,26 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                 ),
                 const SizedBox(width: 14),
 
-                // Subject Details
+                // Subject Details: Title on top, Badges strictly below
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
+                      Text(
+                        subjectName,
+                        style: const TextStyle(
+                          fontSize: 16.5,
+                          fontWeight: FontWeight.w800,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 6,
+                        runSpacing: 4,
                         children: [
-                          Flexible(
-                            child: Text(
-                              subjectName,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                             decoration: BoxDecoration(
@@ -413,8 +432,7 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                               ),
                             ),
                           ),
-                          if (liveCount > 0) ...[
-                            const SizedBox(width: 6),
+                          if (liveCount > 0)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
@@ -447,34 +465,14 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
                                 ],
                               ),
                             ),
-                          ],
                         ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${exams.length} ${exams.length == 1 ? 'Quiz' : 'Quizzes'} • $totalQuestions Questions',
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-                        ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
 
-                // Action Buttons
-                IconButton(
-                  icon: const Icon(Icons.share_outlined, color: AppColors.secondary, size: 20),
-                  tooltip: 'Share all "$subjectName" exams by code',
-                  onPressed: () => _showShareSubjectDialog(context, subjectName, exams),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.add_circle_outline, color: AppColors.secondary, size: 21),
-                  tooltip: 'Add new quiz to $subjectName',
-                  onPressed: () => _handleAddQuizToSubject(context, subjectName),
-                ),
-                const SizedBox(width: 4),
+                // Chevron indicating clickable card
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
@@ -537,16 +535,6 @@ class _MyLibraryScreenState extends ConsumerState<MyLibraryScreen> {
     context.push('/exam/maker');
   }
 
-  void _handleAddQuizToSubject(BuildContext context, String subjectName) {
-    final authState = ref.read(authControllerProvider);
-    if (!authState.isAuthenticated) {
-      ref.read(examMakerControllerProvider.notifier).setSubject(subjectName);
-      context.push('/login', extra: '/exam/maker');
-      return;
-    }
-    ref.read(examMakerControllerProvider.notifier).setSubject(subjectName);
-    context.push('/exam/maker');
-  }
 
   void _showProfileSheet(BuildContext context, WidgetRef ref) {
     final user = ref.read(authControllerProvider).currentUser;

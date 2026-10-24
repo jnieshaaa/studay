@@ -19,12 +19,15 @@ Navigation in StuDay is powered by **GoRouter** (`go_router`), configured in [`l
 | `/study/result` | `QuizResultScreen` | `views/screens/study/quiz_result_screen.dart` | `extra: QuizSession` |
 | `/study/flashcards` | `FlashcardsScreen` | `views/screens/study/flashcards_screen.dart` | `extra: List<Question>` |
 | `/study/weak-questions` | `WeakQuestionsScreen` | `views/screens/study/weak_questions_screen.dart` | None. Loads weak questions from `StudyController`. |
+| `/study/create-flashcard` | `CreateFlashcardScreen` | `views/screens/study/create_flashcard_sheet.dart` | `extra: CreateFlashcardArgs(initialSubject, existingDeck, initialFlashcards)`. Dedicated full-screen flashcard builder. |
+| `/ai-generator` | `AiGeneratorScreen` | `views/screens/ai/ai_generator_screen.dart` | `extra: AiGeneratorArgs(defaultSubject, initialMode)`. Dedicated full-screen AI exam & flashcard generator from PDF/notes. |
 | `/exam` | `ExamHomeScreen` | `views/screens/exam/exam_home_screen.dart` | None. Exam Mode hub (Join Exam vs Host/Create Exam). |
 | `/exam/join` | `ExamJoinScreen` | `views/screens/exam/exam_join_screen.dart` | `extra: String?` (optional initial 6-character code). |
-| `/exam/maker` | `ExamMakerScreen` | `views/screens/exam/exam_maker_screen.dart` | `extra: Exam?` (optional initial exam for edit mode). |
+| `/exam/maker` | `ExamMakerScreen` | `views/screens/exam/exam_maker_screen.dart` | `extra: Exam?` (edit mode) or `extra: ExamMakerArgs` (AI generated questions + subject). |
 | `/exam/play` | `ExamPlayScreen` | `views/screens/exam/exam_play_screen.dart` | `extra: ExamParticipantParam` (contains `exam`, `participant`). |
 | `/exam/result` | `ExamParticipantResultScreen` | `views/screens/exam/exam_participant_result_screen.dart` | `extra: ExamResultParam` (contains `exam`, `participant`, `responses`). |
 | `/exam/dashboard/:id` | `ExamDashboardScreen` | `views/screens/exam/exam_dashboard_screen.dart` | `pathParameters['id']`: ID of the exam to monitor. |
+| Global Launcher | `showAiStudyGeneratorModal` | `views/components/common/ai_study_generator_modal.dart` | Global navigation launcher pushing `/ai-generator`. |
 
 ---
 
@@ -85,7 +88,7 @@ context.push('/exam/dashboard/${exam.id}');
   - Shows outside mode buttons directly on flashcard deck cards: **"Flip Cards"** (Review) and **"Type Quiz"** (Active Recall).
   - Regular exams strictly show **"Practice"** and **"Take Quiz"** (all flashcard options removed from exams).
 - **`MyLibraryScreen`**:
-  - Replaced inline expandable accordion cards with clean, dedicated **clickable subject cards**.
+  - Replaced inline expandable accordion cards with clean, dedicated **clickable subject cards** with full-width title, badges strictly below the title, and no cluttering action buttons (Share and Add are located in `SubjectQuizzesScreen` or via long-press).
   - Clicking any subject card navigates to `SubjectQuizzesScreen` with the clicked subject name as parameter.
   - Features full-width dropdown filter for "All Subjects" (`'__ALL__'`), "Restore Exam", and "New Quiz" creator controls.
 - **`SubjectQuizzesScreen`**:

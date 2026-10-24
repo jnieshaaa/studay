@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quizz_app/core/utils/code_generator.dart';
@@ -14,6 +15,10 @@ import 'package:quizz_app/controllers/exam_maker_controller.dart';
 import 'package:quizz_app/controllers/exam_participant_controller.dart';
 import 'package:quizz_app/core/utils/bulk_question_parser.dart';
 import 'package:quizz_app/controllers/flashcard_controller.dart';
+import 'dart:typed_data';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:quizz_app/core/utils/pdf_extractor.dart';
+import 'package:quizz_app/services/ai_generator_service.dart';
 
 void main() {
   setUp(() {
@@ -1560,4 +1565,249 @@ D) /*
       expect(cleared.questionLimitLabel, '50 Qs');
     });
   });
+
+  group('AI PDF Generator & Extractor Tests', () {
+    test('PdfExtractor extracts text and page count from in-memory PDF', () {
+      final document = PdfDocument();
+      final page = document.pages.add();
+      page.graphics.drawString(
+        'Photosynthesis is the process used by plants to convert light energy into chemical energy.',
+        PdfStandardFont(PdfFontFamily.helvetica, 12),
+      );
+      final bytes = document.saveSync();
+      document.dispose();
+
+      final extracted = PdfExtractor.extractTextFromBytes(
+        Uint8List.fromList(bytes),
+        fileName: 'biology_notes.pdf',
+      );
+
+      expect(extracted.fileName, 'biology_notes.pdf');
+      expect(extracted.pageCount, 1);
+      expect(extracted.text, contains('Photosynthesis'));
+      expect(extracted.text, contains('chemical energy'));
+    });
+
+    test('AiGeneratorService manages API keys and throws when key is missing', () async {
+      final storage = LocalStorageService();
+      final aiService = AiGeneratorService(storage);
+
+      // Initially no key in mock prefs or override
+      expect(await aiService.getActiveApiKey(), isNull);
+
+      // Save a key
+      await aiService.saveApiKey('test_gemini_key_123');
+      expect(await aiService.getActiveApiKey(), 'test_gemini_key_123');
+
+      // Explicit override has higher priority
+      expect(
+        await aiService.getActiveApiKey(explicitKey: 'override_key_456'),
+        'override_key_456',
+      );
+
+      // When clearing the key, calling generate throws AiApiKeyMissingException
+      await storage.saveGeminiApiKey('');
+      expect(
+        () => aiService.generateQuestionsFromText('Some content without key'),
+        throwsA(isA<AiApiKeyMissingException>()),
+      );
+      expect(
+        () => aiService.generateFlashcardsFromText('Some content without key'),
+        throwsA(isA<AiApiKeyMissingException>()),
+      );
+    });
+
+    test('AiGeneratorService hashes documents and serves cached questions/flashcards without API calls', () async {
+      final storage = LocalStorageService();
+      final aiService = AiGeneratorService(storage);
+
+      const sampleDoc1 = 'The mitochondria is the powerhouse of the cell.';
+      const sampleDoc1WithExtraSpaces = '  The mitochondria   is the powerhouse of the cell.  \n\n';
+
+      // 1. Whitespace normalization produces identical cryptographic hashes
+      final hash1 = aiService.computeDocumentHash(sampleDoc1);
+      final hash2 = aiService.computeDocumentHash(sampleDoc1WithExtraSpaces);
+      expect(hash1, equals(hash2));
+      expect(hash1.length, 64); // SHA-256 hex string
+
+      // 2. Initially, no cached content exists
+      expect(await aiService.hasCachedQuestions(sampleDoc1, count: 5), isFalse);
+      expect(await aiService.hasCachedFlashcards(sampleDoc1, count: 5), isFalse);
+
+      // 3. Manually populate cache in storage as if previously generated
+      final examKey = aiService.computeCacheKey(sampleDoc1, mode: 'exam', count: 5);
+      final flashcardKey = aiService.computeCacheKey(sampleDoc1, mode: 'flashcard', count: 5);
+
+      final dummyQuestions = [
+        Question(
+          id: 'ai_cached_1',
+          topicId: 'custom',
+          subjectId: 'custom',
+          category: 'Biology',
+          questionText: 'What is the powerhouse of the cell?',
+          questionType: QuestionType.multipleChoice,
+          choices: [
+            QuestionChoice(id: 'c1', questionId: 'ai_cached_1', choiceText: 'Mitochondria', isCorrect: true),
+            QuestionChoice(id: 'c2', questionId: 'ai_cached_1', choiceText: 'Ribosome', isCorrect: false),
+          ],
+        ),
+      ];
+
+      final dummyFlashcards = [
+        {
+          'front': 'Mitochondria',
+          'back': 'Powerhouse of the cell',
+          'hint': 'Produces ATP',
+        },
+      ];
+
+      await storage.saveCachedAiResult(
+        examKey,
+        jsonEncode(dummyQuestions.map((q) => q.toJson()).toList()),
+      );
+      await storage.saveCachedAiResult(
+        flashcardKey,
+        jsonEncode(dummyFlashcards),
+      );
+
+      // 4. Verify cache hit detection
+      expect(await aiService.hasCachedQuestions(sampleDoc1, count: 5), isTrue);
+      expect(await aiService.hasCachedFlashcards(sampleDoc1, count: 5), isTrue);
+
+      // 5. Calling generateQuestionsFromText returns cached questions immediately (0 tokens, no API key needed!)
+      final cachedQs = await aiService.generateQuestionsFromText(
+        sampleDoc1,
+        count: 5,
+        skipCache: false,
+      );
+      expect(cachedQs.length, 1);
+      expect(cachedQs.first.questionText, 'What is the powerhouse of the cell?');
+      expect(cachedQs.first.choices.first.choiceText, 'Mitochondria');
+
+      // 6. Calling generateFlashcardsFromText returns cached flashcards immediately
+      final cachedCards = await aiService.generateFlashcardsFromText(
+        sampleDoc1,
+        count: 5,
+        skipCache: false,
+      );
+      expect(cachedCards.length, 1);
+      expect(cachedCards.first['front'], 'Mitochondria');
+      expect(cachedCards.first['back'], 'Powerhouse of the cell');
+
+      // 7. If skipCache is true without an API key, it throws since it refuses cache and attempts Gemini
+      expect(
+        () => aiService.generateQuestionsFromText(sampleDoc1, count: 5, skipCache: true),
+        throwsA(isA<AiApiKeyMissingException>()),
+      );
+    });
+
+    test('AiGeneratorService generateQuestionsLocally creates requested count for EACH selected question type', () {
+      final storage = LocalStorageService();
+      final aiService = AiGeneratorService(storage);
+
+      const sampleDoc = '''
+• Photosynthesis: The biological process by which green plants convert sunlight into chemical energy.
+• Cellular Respiration: The metabolic pathway that breaks down glucose to produce ATP.
+• Chlorophyll: The green pigment found in cyanobacteria and chloroplasts of algae and plants.
+• Mitochondria: The organelle where biochemical processes of respiration and energy production occur.
+• Ribosome: Complex molecular machine found within all living cells that serves as the site of biological protein synthesis.
+''';
+
+      // Request 10 per type with all 3 question types (10 MCQ + 10 TF + 10 Matching = 30 questions)
+      final questions = aiService.generateQuestionsLocally(
+        sampleDoc,
+        count: 10,
+        subject: 'Biology',
+        types: const [
+          QuestionType.multipleChoice,
+          QuestionType.trueFalse,
+          QuestionType.matching,
+        ],
+      );
+
+      final mcqs = questions.where((q) => q.questionType == QuestionType.multipleChoice).toList();
+      final tfs = questions.where((q) => q.questionType == QuestionType.trueFalse).toList();
+      final matchings = questions.where((q) => q.questionType == QuestionType.matching).toList();
+
+      expect(mcqs.length, 10);
+      expect(tfs.length, 10);
+      expect(matchings.length, 10);
+      expect(questions.length, 30);
+    });
+
+    test('AiGeneratorService filters out structural noise like Part 1, Part 2, and Chapters', () {
+      final storage = LocalStorageService();
+      final aiService = AiGeneratorService(storage);
+
+      // 1. isStructuralNoise test
+      expect(aiService.isStructuralNoise('Part 1'), isTrue);
+      expect(aiService.isStructuralNoise('Part 2'), isTrue);
+      expect(aiService.isStructuralNoise('Chapter 3'), isTrue);
+      expect(aiService.isStructuralNoise('Module 4'), isTrue);
+      expect(aiService.isStructuralNoise('Table of Contents'), isTrue);
+      expect(aiService.isStructuralNoise('Introduction'), isTrue);
+      expect(aiService.isStructuralNoise('Mitochondria'), isFalse);
+      expect(aiService.isStructuralNoise('Photosynthesis'), isFalse);
+      expect(aiService.isStructuralNoise('Cellular Respiration'), isFalse);
+
+      // 2. stripStructuralPrefix test
+      expect(aiService.stripStructuralPrefix('Part 1: Cellular Biology'), 'Cellular Biology');
+      expect(aiService.stripStructuralPrefix('• Chapter 2 - Photosynthesis: Process'), 'Photosynthesis: Process');
+
+      // 3. Document containing structural headers with topics
+      const noisyDoc = '''
+Part 1: Introduction to Cellular Respiration
+Cellular Respiration: The metabolic pathway that breaks down glucose to produce ATP in cells.
+Glycolysis: The initial anaerobic breakdown of glucose into pyruvate occurring in the cytoplasm.
+
+Part 2: Photosynthesis and Energy
+Photosynthesis: The biological process by which green plants convert light energy into chemical energy.
+Chloroplast: The specialized organelle in plant cells that contains chlorophyll for photosynthesis.
+
+Part 3: Genetics
+DNA: The double-stranded molecule encoding hereditary genetic instructions.
+Gene: A hereditary unit of nucleotide sequences in DNA that codes for a functional RNA or protein.
+''';
+
+      final concepts = aiService.extractConceptsFromText(noisyDoc);
+      final conceptTerms = concepts.map((c) => c.key).toList();
+
+      // None of the concepts should be "Part 1", "Part 2", or "Part 3"
+      expect(conceptTerms.contains('Part 1'), isFalse);
+      expect(conceptTerms.contains('Part 2'), isFalse);
+      expect(conceptTerms.contains('Part 3'), isFalse);
+      expect(conceptTerms.contains('Cellular Respiration'), isTrue);
+      expect(conceptTerms.contains('Photosynthesis'), isTrue);
+      expect(conceptTerms.contains('DNA'), isTrue);
+
+      // 4. Generate local questions and ensure no questions ask about Part 1 / Part 2
+      final questions = aiService.generateQuestionsLocally(
+        noisyDoc,
+        count: 5,
+        subject: 'Biology',
+        types: const [
+          QuestionType.multipleChoice,
+          QuestionType.trueFalse,
+          QuestionType.matching,
+        ],
+      );
+
+      expect(questions.length, 15);
+      for (final q in questions) {
+        // Question prompt must not be asking what "Part 1" is
+        expect(q.questionText.contains(RegExp(r'\bPart\s*\d+\b', caseSensitive: false)), isFalse);
+
+        if (q.questionType == QuestionType.multipleChoice) {
+          for (final choice in q.choices) {
+            expect(choice.choiceText.contains(RegExp(r'^Part\s*\d+$', caseSensitive: false)), isFalse);
+          }
+        } else if (q.questionType == QuestionType.matching) {
+          for (final pair in q.matchingPairs) {
+            expect(pair.leftText.contains(RegExp(r'^Part\s*\d+$', caseSensitive: false)), isFalse);
+          }
+        }
+      }
+    });
+  });
 }
+

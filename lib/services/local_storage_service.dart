@@ -16,6 +16,8 @@ class LocalStorageService {
   static const String _keyCurrentUser = 'quizz_current_user_v2';
   static const String _keyUsersList = 'quizz_users_list_v2';
   static const String _keySubjectBundles = 'quizz_subject_bundles_v2';
+  static const String _keyGeminiApiKey = 'quizz_gemini_api_key_v2';
+  static const String _keyAiContentCache = 'quizz_ai_content_cache_v2';
 
   SharedPreferences? _prefs;
 
@@ -251,5 +253,47 @@ class LocalStorageService {
       _keyUsersList,
       jsonEncode(users.map((u) => u.toJson()).toList()),
     );
+  }
+
+  // --- Gemini AI Configuration ---
+  Future<String?> loadGeminiApiKey() async {
+    await init();
+    return _prefs?.getString(_keyGeminiApiKey);
+  }
+
+  Future<void> saveGeminiApiKey(String apiKey) async {
+    await init();
+    await _prefs?.setString(_keyGeminiApiKey, apiKey.trim());
+  }
+
+  // --- AI Content Cache (Token Saver) ---
+  Future<String?> loadCachedAiResult(String cacheKey) async {
+    await init();
+    final jsonMap = _prefs?.getString(_keyAiContentCache);
+    if (jsonMap == null || jsonMap.isEmpty) return null;
+    try {
+      final map = jsonDecode(jsonMap) as Map<String, dynamic>;
+      return map[cacheKey] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCachedAiResult(String cacheKey, String jsonContent) async {
+    await init();
+    Map<String, dynamic> cacheMap = {};
+    final existing = _prefs?.getString(_keyAiContentCache);
+    if (existing != null && existing.isNotEmpty) {
+      try {
+        cacheMap = jsonDecode(existing) as Map<String, dynamic>;
+      } catch (_) {}
+    }
+    cacheMap[cacheKey] = jsonContent;
+    await _prefs?.setString(_keyAiContentCache, jsonEncode(cacheMap));
+  }
+
+  Future<bool> hasCachedAiResult(String cacheKey) async {
+    final result = await loadCachedAiResult(cacheKey);
+    return result != null && result.isNotEmpty;
   }
 }

@@ -300,5 +300,16 @@ class Exam {
           DateTime.now(),
     );
   }
+}
 
+class ExamMakerArgs {
+  final Exam? initialExam;
+  final List<Question>? initialQuestions;
+  final String? initialSubject;
+
+  const ExamMakerArgs({
+    this.initialExam,
+    this.initialQuestions,
+    this.initialSubject,
+  });
 }

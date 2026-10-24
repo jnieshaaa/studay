@@ -9,6 +9,7 @@ import '../../../controllers/exam_participant_controller.dart';
 import '../../../models/quiz_session_model.dart';
 import '../../../models/exam_model.dart';
 import '../../components/common/gradient_card.dart';
+import '../../components/common/ai_study_generator_modal.dart';
 import 'create_flashcard_sheet.dart';
 import 'flashcards_screen.dart';
 
@@ -69,6 +70,15 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome, color: Color(0xFF6366F1)),
+            tooltip: 'AI PDF Generator',
+            onPressed: () => showAiStudyGeneratorModal(
+              context,
+              ref,
+              defaultSubject: selectedSubjectObj?.name,
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.style, color: AppColors.secondary),
             tooltip: 'Create Flashcards',
@@ -216,6 +226,25 @@ class _StudyHomeScreenState extends ConsumerState<StudyHomeScreen> {
                     icon: const Icon(Icons.download_rounded, size: 20, color: AppColors.secondary),
                     tooltip: 'Import Exam as Study Deck',
                     onPressed: () => _showImportExamSheet(context, ref),
+                  ),
+                  const SizedBox(width: 6),
+                  // Quick Action 3: AI PDF Study Generator
+                  IconButton(
+                    style: IconButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                      padding: const EdgeInsets.all(11),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+                      ),
+                    ),
+                    icon: const Icon(Icons.auto_awesome, size: 20, color: Color(0xFF6366F1)),
+                    tooltip: 'AI PDF Generator (Exams & Decks)',
+                    onPressed: () => showAiStudyGeneratorModal(
+                      context,
+                      ref,
+                      defaultSubject: selectedSubjectObj?.name,
+                    ),
                   ),
                 ],
               ),

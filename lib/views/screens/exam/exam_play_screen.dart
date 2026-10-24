@@ -254,6 +254,8 @@ class _ExamPlayScreenState extends ConsumerState<ExamPlayScreen> {
                           controller.connectMatchingRight(currentQ.id, right),
                       onRemovePair: (left) =>
                           controller.removeMatchingPair(currentQ.id, left),
+                      onPairChanged: (left, right) =>
+                          controller.setMatchingPair(currentQ.id, left, right),
                     ),
                   ] else ...[
                     ...currentQ.choices.map((choice) {

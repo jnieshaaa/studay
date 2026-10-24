@@ -163,6 +163,26 @@ class ExamParticipantController extends StateNotifier<ExamParticipantPlayState> 
     state = state.copyWith(matchingAnswers: updatedAll);
   }
 
+  void setMatchingPair(String questionId, String leftText, String? rightText) {
+    final currentPairs = Map<String, String>.from(
+      state.matchingAnswers[questionId] ?? {},
+    );
+    if (rightText == null || rightText.trim().isEmpty) {
+      currentPairs.remove(leftText);
+    } else {
+      currentPairs.removeWhere((k, v) => v == rightText);
+      currentPairs[leftText] = rightText;
+    }
+
+    final updatedAll = Map<String, Map<String, String>>.from(state.matchingAnswers);
+    updatedAll[questionId] = currentPairs;
+
+    state = state.copyWith(
+      matchingAnswers: updatedAll,
+      clearActiveMatchingLeft: true,
+    );
+  }
+
   void nextQuestion() {
     if (!state.isLastQuestion) {
       state = state.copyWith(

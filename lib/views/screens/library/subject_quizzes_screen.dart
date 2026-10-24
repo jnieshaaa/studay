@@ -185,7 +185,7 @@ class _SubjectQuizzesScreenState extends ConsumerState<SubjectQuizzesScreen> {
                           infoWidget,
                           const SizedBox(height: 12),
                           CustomButton(
-                            text: '+ Add to ${widget.subjectName}',
+                            text: '+ Add',
                             icon: Icons.add,
                             width: double.infinity,
                             variant: ButtonVariant.primaryGradient,
@@ -201,7 +201,7 @@ class _SubjectQuizzesScreenState extends ConsumerState<SubjectQuizzesScreen> {
                         Expanded(child: infoWidget),
                         const SizedBox(width: 12),
                         CustomButton(
-                          text: '+ Add to Subject',
+                          text: '+ Add',
                           icon: Icons.add,
                           variant: ButtonVariant.primaryGradient,
                           height: 38,
@@ -218,17 +218,22 @@ class _SubjectQuizzesScreenState extends ConsumerState<SubjectQuizzesScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'QUIZZES & DECKS IN ${widget.subjectName.toUpperCase()}',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.0,
-                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                  Expanded(
+                    child: Text(
+                      'QUIZZES & DECKS IN ${widget.subjectName.toUpperCase()}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.0,
+                        color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
-                    '${subjectExams.length} items',
+                    '${subjectExams.length} ${subjectExams.length == 1 ? 'item' : 'items'}',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,

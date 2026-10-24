@@ -21,6 +21,8 @@ import '../../views/screens/library/my_library_screen.dart';
 import '../../views/screens/library/subject_quizzes_screen.dart';
 import '../../views/screens/auth/username_setup_screen.dart';
 import '../../views/screens/splash/splash_screen.dart';
+import '../../views/screens/ai/ai_generator_screen.dart';
+import '../../views/screens/study/create_flashcard_sheet.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -107,7 +109,36 @@ final GoRouter appRouter = GoRouter(
           path: 'weak-questions',
           builder: (context, state) => const WeakQuestionsScreen(),
         ),
+        GoRoute(
+          path: 'create-flashcard',
+          builder: (context, state) {
+            if (state.extra is CreateFlashcardArgs) {
+              final args = state.extra as CreateFlashcardArgs;
+              return CreateFlashcardScreen(
+                initialSubject: args.initialSubject,
+                existingDeck: args.existingDeck,
+                initialFlashcards: args.initialFlashcards,
+              );
+            }
+            return const CreateFlashcardScreen();
+          },
+        ),
       ],
+    ),
+
+    // AI Document Generator Full Screen
+    GoRoute(
+      path: '/ai-generator',
+      builder: (context, state) {
+        if (state.extra is AiGeneratorArgs) {
+          final args = state.extra as AiGeneratorArgs;
+          return AiGeneratorScreen(
+            defaultSubject: args.defaultSubject,
+            initialMode: args.initialMode,
+          );
+        }
+        return const AiGeneratorScreen();
+      },
     ),
 
     // Exam Mode Routes
@@ -125,6 +156,14 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'maker',
           builder: (context, state) {
+            if (state.extra is ExamMakerArgs) {
+              final args = state.extra as ExamMakerArgs;
+              return ExamMakerScreen(
+                initialExam: args.initialExam,
+                initialQuestions: args.initialQuestions,
+                initialSubject: args.initialSubject,
+              );
+            }
             final initialExam = state.extra as Exam?;
             return ExamMakerScreen(initialExam: initialExam);
           },

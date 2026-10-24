@@ -6,9 +6,10 @@ class MatchingQuestionWidget extends StatefulWidget {
   final List<MatchingPair> pairs;
   final Map<String, String> userPairs; // leftText -> rightText
   final String? activeLeft;
-  final Function(String leftText) onSelectLeft;
-  final Function(String rightText) onConnectRight;
-  final Function(String leftText) onRemovePair;
+  final Function(String leftText)? onSelectLeft;
+  final Function(String rightText)? onConnectRight;
+  final Function(String leftText)? onRemovePair;
+  final Function(String leftText, String? rightText)? onPairChanged;
   final bool isRevealed;
 
   const MatchingQuestionWidget({
@@ -16,9 +17,10 @@ class MatchingQuestionWidget extends StatefulWidget {
     required this.pairs,
     required this.userPairs,
     this.activeLeft,
-    required this.onSelectLeft,
-    required this.onConnectRight,
-    required this.onRemovePair,
+    this.onSelectLeft,
+    this.onConnectRight,
+    this.onRemovePair,
+    this.onPairChanged,
     this.isRevealed = false,
   });
 
@@ -28,21 +30,8 @@ class MatchingQuestionWidget extends StatefulWidget {
 
 class _MatchingQuestionWidgetState extends State<MatchingQuestionWidget> {
   late List<String> _shuffledRight;
+  final Map<String, String> _lettersMap = {}; // rightText -> 'A', 'B', ...
   String _lastPairsKey = '';
-
-  // Palette colors for matched pairs (cycling cleanly up to 10 pairs)
-  static const List<Color> _pairColors = [
-    AppColors.secondary,
-    AppColors.tertiary,
-    AppColors.accent,
-    AppColors.primary,
-    Color(0xFFFFB300),
-    Color(0xFFFF7043),
-    Color(0xFFFFCA28),
-    Color(0xFFE64A19),
-    Color(0xFFFFA000),
-    Color(0xFFD84315),
-  ];
 
   @override
   void initState() {
@@ -53,60 +42,92 @@ class _MatchingQuestionWidgetState extends State<MatchingQuestionWidget> {
   @override
   void didUpdateWidget(covariant MatchingQuestionWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final key = widget.pairs.map((p) => p.id).join(',');
+    final key = widget.pairs.map((p) => '${p.id}:${p.leftText}:${p.rightText}').join(',');
     if (key != _lastPairsKey) {
       _initShuffled();
     }
   }
 
   void _initShuffled() {
-    _lastPairsKey = widget.pairs.map((p) => p.id).join(',');
-    final list = widget.pairs.map((p) => p.rightText).toList();
+    _lastPairsKey = widget.pairs.map((p) => '${p.id}:${p.leftText}:${p.rightText}').join(',');
+    final uniqueRights = widget.pairs.map((p) => p.rightText).toSet().toList();
     // Shuffle right-side definitions so they don't align 1-to-1 with terms
-    list.shuffle();
-    if (list.length > 1 && widget.pairs.length > 1) {
+    uniqueRights.shuffle();
+    if (uniqueRights.length > 1 && widget.pairs.length > 1) {
       bool isIdentical = true;
-      for (int i = 0; i < list.length; i++) {
-        if (list[i] != widget.pairs[i].rightText) {
+      for (int i = 0; i < uniqueRights.length && i < widget.pairs.length; i++) {
+        if (uniqueRights[i] != widget.pairs[i].rightText) {
           isIdentical = false;
           break;
         }
       }
       if (isIdentical) {
-        // Rotate so no item sits directly opposite its matching term
-        final first = list.removeAt(0);
-        list.add(first);
+        final first = uniqueRights.removeAt(0);
+        uniqueRights.add(first);
       }
     }
-    _shuffledRight = list;
+    _shuffledRight = uniqueRights;
+
+    _lettersMap.clear();
+    for (int i = 0; i < _shuffledRight.length; i++) {
+      _lettersMap[_shuffledRight[i]] = _letterForIndex(i);
+    }
+  }
+
+  String _letterForIndex(int idx) {
+    if (idx < 26) {
+      return String.fromCharCode(65 + idx);
+    }
+    return '${idx + 1}';
+  }
+
+  void _handlePairChange(String leftText, String? rightText) {
+    if (widget.isRevealed) return;
+    if (widget.onPairChanged != null) {
+      widget.onPairChanged!(leftText, rightText);
+      return;
+    }
+    if (rightText == null || rightText.isEmpty) {
+      widget.onRemovePair?.call(leftText);
+    } else {
+      widget.onSelectLeft?.call(leftText);
+      widget.onConnectRight?.call(rightText);
+    }
+  }
+
+  void _clearAllPairs() {
+    if (widget.isRevealed) return;
+    for (final pair in widget.pairs) {
+      if (widget.userPairs.containsKey(pair.leftText)) {
+        _handlePairChange(pair.leftText, null);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // Get all left items
-    final leftItems = widget.pairs.map((p) => p.leftText).toList();
+    final matchedCount = widget.userPairs.length;
+    final totalCount = widget.pairs.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Header Instructions & Progress
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.secondary.withValues(alpha: 0.12),
+            color: AppColors.secondary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+            border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
           ),
           child: Row(
             children: [
-              const Icon(Icons.touch_app, size: 18, color: AppColors.secondary),
-              const SizedBox(width: 8),
+              const Icon(Icons.rule, size: 20, color: AppColors.secondary),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  widget.activeLeft == null
-                      ? 'Tap an item on the left, then tap its match on the right.'
-                      : 'Now tap the matching definition on the right.',
+                  'Select the matching answer for each question from the dropdown.',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -114,227 +135,418 @@ class _MatchingQuestionWidgetState extends State<MatchingQuestionWidget> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: matchedCount == totalCount && totalCount > 0
+                      ? AppColors.success.withValues(alpha: 0.15)
+                      : AppColors.secondary.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: matchedCount == totalCount && totalCount > 0
+                        ? AppColors.success.withValues(alpha: 0.4)
+                        : AppColors.secondary.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  '$matchedCount / $totalCount matched',
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w700,
+                    color: matchedCount == totalCount && totalCount > 0
+                        ? AppColors.success
+                        : AppColors.secondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Available Choices Pool
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.list_alt,
+                    size: 16,
+                    color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'CHOICES POOL',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.8,
+                      color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _shuffledRight.map((choice) {
+                  final letter = _lettersMap[choice] ?? '';
+                  final isUsed = widget.userPairs.values.contains(choice);
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isUsed
+                          ? (isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05))
+                          : AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isUsed
+                            ? (isDark ? Colors.white24 : Colors.black12)
+                            : AppColors.primary.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isUsed
+                                ? (isDark ? Colors.white24 : Colors.black26)
+                                : AppColors.primary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            letter,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          choice,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isUsed ? FontWeight.w400 : FontWeight.w600,
+                            color: isUsed
+                                ? (isDark ? Colors.white38 : Colors.black38)
+                                : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight),
+                            decoration: isUsed ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        // Two columns side-by-side with responsive flex distribution
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Left Column (Terms) - flex 2
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: leftItems.asMap().entries.map((entry) {
-                  final idx = entry.key;
-                  final left = entry.value;
-                  final isSelected = widget.activeLeft == left;
-                  final isPaired = widget.userPairs.containsKey(left);
-                  final pairColor = _pairColors[idx % _pairColors.length];
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
-                      onTap: widget.isRevealed ? null : () => widget.onSelectLeft(left),
-                      borderRadius: BorderRadius.circular(14),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? pairColor.withValues(alpha: 0.25)
-                              : (isPaired
-                                  ? pairColor.withValues(alpha: 0.12)
-                                  : (isDark ? AppColors.darkCard : AppColors.lightCard)),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isSelected
-                                ? pairColor
-                                : (isPaired
-                                    ? pairColor.withValues(alpha: 0.7)
-                                    : (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
-                            width: isSelected ? 2 : (isPaired ? 1.5 : 1),
-                          ),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: pairColor.withValues(alpha: 0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 22,
-                              height: 22,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isPaired || isSelected
-                                    ? pairColor
-                                    : Colors.grey.withValues(alpha: 0.2),
-                              ),
-                              child: Text(
-                                '${idx + 1}',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w800,
-                                  color: isPaired || isSelected
-                                      ? Colors.white
-                                      : (isDark ? Colors.white70 : Colors.black87),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                left,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: isSelected || isPaired ? FontWeight.w700 : FontWeight.w500,
-                                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
+        // Questions List: 1. Question -> Dropdown
+        ...widget.pairs.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final pair = entry.value;
+          final selectedRight = widget.userPairs[pair.leftText];
+          final hasAnswer = selectedRight != null && selectedRight.isNotEmpty;
+          final isCorrect = selectedRight == pair.rightText;
+
+          return Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkCard : AppColors.lightCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: widget.isRevealed
+                    ? (isCorrect
+                        ? AppColors.success.withValues(alpha: 0.6)
+                        : AppColors.error.withValues(alpha: 0.6))
+                    : (hasAnswer
+                        ? AppColors.primary.withValues(alpha: 0.4)
+                        : (isDark ? AppColors.darkBorder : AppColors.lightBorder)),
+                width: widget.isRevealed || hasAnswer ? 1.5 : 1.0,
               ),
             ),
-            const SizedBox(width: 10),
-            // Right Column (Definitions) - flex 3 for longer definition text
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: _shuffledRight.map((right) {
-                  // Check if any left is paired with this right
-                  final pairedLeft = widget.userPairs.entries
-                      .where((e) => e.value == right)
-                      .map((e) => e.key)
-                      .firstOrNull;
-                  final leftIdx = pairedLeft != null ? leftItems.indexOf(pairedLeft) : -1;
-                  final pairColor = leftIdx >= 0 ? _pairColors[leftIdx % _pairColors.length] : null;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: InkWell(
-                      onTap: widget.isRevealed ? null : () => widget.onConnectRight(right),
-                      borderRadius: BorderRadius.circular(14),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: pairColor != null
-                              ? pairColor.withValues(alpha: 0.12)
-                              : (isDark ? AppColors.darkCard : AppColors.lightCard),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: pairColor != null
-                                ? pairColor.withValues(alpha: 0.7)
-                                : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
-                            width: pairColor != null ? 1.5 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            if (pairColor != null) ...[
-                              Container(
-                                width: 20,
-                                height: 20,
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: pairColor,
-                                ),
-                                child: Text(
-                                  '${leftIdx + 1}',
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(
-                              child: Text(
-                                right,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  fontWeight: pairColor != null ? FontWeight.w600 : FontWeight.w400,
-                                  color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-
-        // Pairs Summary / Undo Chips
-        if (widget.userPairs.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            'Connected Pairs (${widget.userPairs.length}/${widget.pairs.length}):',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: widget.userPairs.entries.map((entry) {
-              final leftIdx = leftItems.indexOf(entry.key);
-              final pairColor = leftIdx >= 0 ? _pairColors[leftIdx % _pairColors.length] : AppColors.secondary;
-
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: pairColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: pairColor.withValues(alpha: 0.4)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. Text question (Premise)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${entry.key} ↔ ${entry.value.length > 20 ? '${entry.value.substring(0, 20)}...' : entry.value}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: pairColor,
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: hasAnswer
+                            ? AppColors.primary
+                            : (isDark ? Colors.white12 : Colors.black12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${idx + 1}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: hasAnswer
+                              ? Colors.white
+                              : (isDark ? Colors.white70 : Colors.black87),
+                        ),
                       ),
                     ),
-                    if (!widget.isRevealed) ...[
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () => widget.onRemovePair(entry.key),
-                        child: Icon(Icons.close, size: 14, color: pairColor),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        pair.leftText,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                        ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
-              );
-            }).toList(),
+                const SizedBox(height: 12),
+
+                // Dropdown Options
+                Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: hasAnswer
+                          ? AppColors.primary.withValues(alpha: 0.5)
+                          : (isDark ? AppColors.darkBorder : AppColors.lightBorder),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: selectedRight,
+                            hint: Row(
+                              children: [
+                                Icon(
+                                  Icons.unfold_more,
+                                  size: 18,
+                                  color: isDark ? Colors.white38 : Colors.black38,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Select matching answer...',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    color: isDark ? Colors.white38 : Colors.black38,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            dropdownColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                            borderRadius: BorderRadius.circular(14),
+                            icon: const SizedBox.shrink(),
+                            items: [
+                              if (hasAnswer && !widget.isRevealed)
+                                DropdownMenuItem<String>(
+                                  value: '__CLEAR__',
+                                  child: Row(
+                                    children: const [
+                                      Icon(Icons.close, size: 18, color: AppColors.error),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '-- Clear / Remove Answer --',
+                                        style: TextStyle(
+                                          fontSize: 13.5,
+                                          color: AppColors.error,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ..._shuffledRight.map((choice) {
+                                final letter = _lettersMap[choice] ?? '';
+                                final isSelectedForThis = selectedRight == choice;
+                                final usedInOtherIdx = widget.userPairs.entries
+                                    .where((e) => e.value == choice && e.key != pair.leftText)
+                                    .map((e) => widget.pairs.indexWhere((p) => p.leftText == e.key) + 1)
+                                    .firstOrNull;
+
+                                return DropdownMenuItem<String>(
+                                  value: choice,
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 24,
+                                        height: 24,
+                                        alignment: Alignment.center,
+                                        decoration: BoxDecoration(
+                                          color: isSelectedForThis
+                                              ? AppColors.primary
+                                              : (isDark ? Colors.white10 : Colors.black12),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          letter,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w800,
+                                            color: isSelectedForThis
+                                                ? Colors.white
+                                                : (isDark ? Colors.white70 : Colors.black87),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          choice,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: isSelectedForThis ? FontWeight.w700 : FontWeight.w400,
+                                            color: isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                          maxLines: 2,
+                                        ),
+                                      ),
+                                      if (usedInOtherIdx != null && usedInOtherIdx > 0)
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 6),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'Used in #$usedInOtherIdx',
+                                            style: const TextStyle(
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.amber,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                            onChanged: widget.isRevealed
+                                ? null
+                                : (val) {
+                                    if (val == null || val == '__CLEAR__') {
+                                      _handlePairChange(pair.leftText, null);
+                                    } else {
+                                      _handlePairChange(pair.leftText, val);
+                                    }
+                                  },
+                          ),
+                        ),
+                      ),
+                      if (hasAnswer && !widget.isRevealed)
+                        IconButton(
+                          icon: const Icon(Icons.cancel, size: 20, color: AppColors.textSecondaryDark),
+                          tooltip: 'Remove answer',
+                          splashRadius: 18,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () => _handlePairChange(pair.leftText, null),
+                        )
+                      else
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Icon(Icons.arrow_drop_down, color: AppColors.primary),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Revealed feedback (Practice mode / Review)
+                if (widget.isRevealed) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isCorrect
+                          ? AppColors.success.withValues(alpha: 0.1)
+                          : AppColors.error.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isCorrect
+                            ? AppColors.success.withValues(alpha: 0.4)
+                            : AppColors.error.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isCorrect ? Icons.check_circle : Icons.cancel,
+                          size: 16,
+                          color: isCorrect ? AppColors.success : AppColors.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            isCorrect
+                                ? 'Correct Match!'
+                                : 'Correct Answer: [${_lettersMap[pair.rightText] ?? ''}] ${pair.rightText}',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: isCorrect ? AppColors.success : AppColors.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        }),
+
+        // Clear All Button
+        if (matchedCount > 0 && !widget.isRevealed) ...[
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: _clearAllPairs,
+              icon: const Icon(Icons.restart_alt, size: 16, color: AppColors.error),
+              label: const Text(
+                'Clear All Answers',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.error,
+                ),
+              ),
+            ),
           ),
         ],
       ],

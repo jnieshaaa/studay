@@ -15,10 +15,19 @@ import '../../components/common/gradient_card.dart';
 import '../../components/common/custom_button.dart';
 import 'exam_section_questions_screen.dart';
 import 'bulk_import_questions_dialog.dart';
+import '../../components/common/ai_pdf_import_dialog.dart';
 
 class ExamMakerScreen extends ConsumerStatefulWidget {
   final Exam? initialExam;
-  const ExamMakerScreen({super.key, this.initialExam});
+  final List<Question>? initialQuestions;
+  final String? initialSubject;
+
+  const ExamMakerScreen({
+    super.key,
+    this.initialExam,
+    this.initialQuestions,
+    this.initialSubject,
+  });
 
   @override
   ConsumerState<ExamMakerScreen> createState() => _ExamMakerScreenState();
@@ -38,9 +47,13 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
   void initState() {
     super.initState();
     final exam = widget.initialExam;
-    // For a brand new exam, ALWAYS clear the textfield and never pre-fill an existing subject!
-    _subjectController = TextEditingController(text: exam?.subject ?? '');
-    _titleController = TextEditingController(text: exam?.title ?? '');
+    final initialSubj = widget.initialSubject ?? exam?.subject ?? '';
+    final defaultTitle = widget.initialQuestions != null && widget.initialQuestions!.isNotEmpty
+        ? (initialSubj.isNotEmpty ? '$initialSubj Exam' : 'AI Generated Exam')
+        : (exam?.title ?? '');
+
+    _subjectController = TextEditingController(text: initialSubj);
+    _titleController = TextEditingController(text: defaultTitle);
     _descController = TextEditingController(text: exam?.description ?? '');
     _durationController = TextEditingController(
       text: exam?.durationMinutes != null && exam!.durationMinutes! > 0
@@ -53,11 +66,19 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
           : '',
     );
 
+    // If pre-loaded with AI questions, advance straight to review & publish step
+    if (widget.initialQuestions != null && widget.initialQuestions!.isNotEmpty) {
+      _currentStep = 1;
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (exam != null) {
         ref.read(examMakerControllerProvider.notifier).initForEdit(exam);
       } else {
         ref.read(examMakerControllerProvider.notifier).reset();
+        if (widget.initialQuestions != null && widget.initialQuestions!.isNotEmpty) {
+          ref.read(examMakerControllerProvider.notifier).addQuestions(widget.initialQuestions!);
+        }
       }
     });
   }
@@ -1091,41 +1112,82 @@ class _ExamMakerScreenState extends ConsumerState<ExamMakerScreen> {
                         color: AppColors.secondary.withValues(alpha: 0.25),
                       ),
                     ),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.bolt, color: AppColors.secondary, size: 20),
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Quick Bulk Paste Questions',
-                                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+                                ),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              Text(
-                                'Paste multiple questions & options at once instead of 1:1 typing.',
-                                style: TextStyle(fontSize: 11, color: Colors.grey),
+                              child: const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Import & Generate Questions',
+                                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                  ),
+                                  Text(
+                                    'Generate questions from PDF using Gemini AI or paste text in bulk.',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        ElevatedButton.icon(
-                          onPressed: () => showBulkImportQuestionsSheet(context),
-                          icon: const Icon(Icons.playlist_add, size: 16),
-                          label: const Text('Bulk Paste', style: TextStyle(fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.secondary,
-                            foregroundColor: Colors.white,
-                            visualDensity: VisualDensity.compact,
-                          ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                AiPdfImportDialog.show(
+                                  context,
+                                  isFlashcardMode: false,
+                                  defaultSubject: _subjectController.text.trim(),
+                                  onQuestionsGenerated: (questions) {
+                                    ref.read(examMakerControllerProvider.notifier).addQuestions(questions);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Generated ${questions.length} questions from PDF with Gemini AI!'),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              icon: const Icon(Icons.auto_awesome, size: 14),
+                              label: const Text('AI from PDF', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF6366F1),
+                                foregroundColor: Colors.white,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: () => showBulkImportQuestionsSheet(context),
+                              icon: const Icon(Icons.playlist_add, size: 15),
+                              label: const Text('Quick Bulk Paste', style: TextStyle(fontSize: 11.5)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                foregroundColor: Colors.white,
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -2039,7 +2101,7 @@ class _AddQuestionSheetState extends State<AddQuestionSheet> {
         category: category,
         questionText: prompt,
         questionType: QuestionType.matching,
-        explanation: _expController.text.trim(),
+        explanation: '',
         matchingPairs: pairs,
       );
     }
@@ -2444,40 +2506,97 @@ class _AddQuestionSheetState extends State<AddQuestionSheet> {
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               ...List.generate(_leftControllers.length, (i) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _leftControllers[i],
-                          decoration: InputDecoration(
-                            hintText: 'Item ${i + 1}',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Pair #${i + 1}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.secondary,
+                              ),
+                            ),
                           ),
+                          if (_leftControllers.length > 2)
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                              tooltip: 'Remove Pair',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => _removePair(i),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'PREMISE / QUESTION (Left)',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                          color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
                         ),
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 6),
-                        child: Icon(Icons.arrow_forward, size: 16, color: AppColors.secondary),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _leftControllers[i],
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          hintText: 'Enter premise or question for Item ${i + 1}...',
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        ),
                       ),
-                      Expanded(
-                        child: TextField(
-                          controller: _rightControllers[i],
-                          decoration: InputDecoration(
-                            hintText: 'Match ${i + 1}',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          const Icon(Icons.arrow_downward, size: 13, color: AppColors.secondary),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'MATCHING ANSWER / DEFINITION (Right)',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.4,
+                                color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+                              ),
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      TextField(
+                        controller: _rightControllers[i],
+                        maxLines: null,
+                        decoration: InputDecoration(
+                          hintText: 'Enter matching answer or definition for Item ${i + 1}...',
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         ),
                       ),
-                      if (_leftControllers.length > 2)
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: AppColors.error),
-                          tooltip: 'Remove Pair',
-                          onPressed: () => _removePair(i),
-                        ),
                     ],
                   ),
                 );
@@ -2485,14 +2604,16 @@ class _AddQuestionSheetState extends State<AddQuestionSheet> {
             ],
             const SizedBox(height: 16),
 
-            TextField(
-              controller: _expController,
-              decoration: const InputDecoration(
-                labelText: 'Explanation (Optional)',
-                hintText: 'Explains why the correct answer is right...',
+            if (_selectedType != QuestionType.matching) ...[
+              TextField(
+                controller: _expController,
+                decoration: const InputDecoration(
+                  labelText: 'Explanation (Optional)',
+                  hintText: 'Explains why the correct answer is right...',
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
 
             CustomButton(
               text: widget.initialQuestion != null ? 'Update Question' : 'Save Question',

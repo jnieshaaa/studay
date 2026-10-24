@@ -122,6 +122,21 @@ class QuizController extends StateNotifier<QuizPlayState> {
     state = state.copyWith(currentMatchingPairs: updatedPairs);
   }
 
+  void setMatchingPair(String leftText, String? rightText) {
+    if (state.hasConfirmedAnswer && state.session.mode == StudyMode.practice) return;
+    final updatedPairs = Map<String, String>.from(state.currentMatchingPairs);
+    if (rightText == null || rightText.trim().isEmpty) {
+      updatedPairs.remove(leftText);
+    } else {
+      updatedPairs.removeWhere((k, v) => v == rightText);
+      updatedPairs[leftText] = rightText;
+    }
+    state = state.copyWith(
+      currentMatchingPairs: updatedPairs,
+      clearMatchingLeft: true,
+    );
+  }
+
   /// In practice mode, check answer and display instant explanation
   void confirmPracticeAnswer() {
     final q = state.currentQuestion;

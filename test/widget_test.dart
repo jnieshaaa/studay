@@ -18,6 +18,10 @@ import 'package:quizz_app/controllers/providers.dart';
 import 'package:quizz_app/controllers/study_controller.dart';
 import 'package:quizz_app/views/screens/study/create_flashcard_sheet.dart';
 import 'package:quizz_app/views/screens/study/flashcards_screen.dart';
+import 'package:quizz_app/views/components/quiz/matching_question_widget.dart';
+import 'package:quizz_app/views/components/common/ai_pdf_import_dialog.dart';
+import 'package:quizz_app/views/screens/home/home_screen.dart';
+import 'package:quizz_app/views/screens/ai/ai_generator_screen.dart';
 
 void main() {
   setUp(() {
@@ -569,12 +573,8 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
-    // Find the Share Subject icon button on a subject card
-    final shareSubjectBtn = find.byIcon(Icons.share_outlined);
-    expect(shareSubjectBtn, findsWidgets);
-
-    // Tap the first share button
-    await tester.tap(shareSubjectBtn.first);
+    // Long-press the subject card to open Share Subject dialog
+    await tester.longPress(find.text('Science').first);
     await tester.pumpAndSettle();
 
     // Verify Share Subject dialog opens with unique code section
@@ -894,6 +894,213 @@ void main() {
     // Close sheet
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('MatchingQuestionWidget renders sequential questions with dropdowns and allows changing/removing answers', (WidgetTester tester) async {
+    final pairs = [
+      const MatchingPair(id: 'mp_1', questionId: 'q_1', leftText: 'Capital of France', rightText: 'Paris'),
+      const MatchingPair(id: 'mp_2', questionId: 'q_1', leftText: 'Capital of Japan', rightText: 'Tokyo'),
+      const MatchingPair(id: 'mp_3', questionId: 'q_1', leftText: 'Capital of Italy', rightText: 'Rome'),
+    ];
+
+    Map<String, String> userPairs = {};
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              return SingleChildScrollView(
+                child: MatchingQuestionWidget(
+                  pairs: pairs,
+                  userPairs: userPairs,
+                  onPairChanged: (left, right) {
+                    setState(() {
+                      if (right == null) {
+                        userPairs.remove(left);
+                      } else {
+                        userPairs[left] = right;
+                      }
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify sequential questions are displayed
+    expect(find.text('Capital of France'), findsOneWidget);
+    expect(find.text('Capital of Japan'), findsOneWidget);
+    expect(find.text('Capital of Italy'), findsOneWidget);
+
+    // Verify Choices Pool is rendered
+    expect(find.text('CHOICES POOL'), findsOneWidget);
+    expect(find.text('Paris'), findsWidgets);
+    expect(find.text('Tokyo'), findsWidgets);
+    expect(find.text('Rome'), findsWidgets);
+
+    // Initial state: 0 / 3 matched, all 3 dropdowns show placeholder
+    expect(find.text('0 / 3 matched'), findsOneWidget);
+    expect(find.text('Select matching answer...'), findsNWidgets(3));
+
+    // Tap the first dropdown
+    await tester.tap(find.text('Select matching answer...').first, warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    // In the dropdown menu, select 'Paris'
+    // 'Paris' will appear in the dropdown menu items
+    await tester.tap(find.text('Paris').last);
+    await tester.pumpAndSettle();
+
+    // Verify 1 / 3 matched and Paris is now selected for the first question
+    expect(find.text('1 / 3 matched'), findsOneWidget);
+    expect(userPairs['Capital of France'], 'Paris');
+
+    // Verify cancel icon button exists to remove answer
+    expect(find.byTooltip('Remove answer'), findsOneWidget);
+
+    // Now change answer for first question: tap dropdown again and pick 'Tokyo'
+    await tester.tap(find.text('Paris').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tokyo').last);
+    await tester.pumpAndSettle();
+
+    // Verify answer was changed to Tokyo
+    expect(userPairs['Capital of France'], 'Tokyo');
+
+    // Now remove the answer using the inline remove button (cancel icon)
+    await tester.tap(find.byTooltip('Remove answer'));
+    await tester.pumpAndSettle();
+
+    // Verify answer was removed
+    expect(userPairs.containsKey('Capital of France'), isFalse);
+    expect(find.text('0 / 3 matched'), findsOneWidget);
+    expect(find.text('Select matching answer...'), findsNWidgets(3));
+  });
+
+  testWidgets('AiPdfImportDialog renders client-safe UI without exposing API key configuration', (WidgetTester tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: AiPdfImportDialog(
+              isFlashcardMode: false,
+              defaultSubject: 'Science',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify title and client-friendly assistant subtitle
+    expect(find.text('Generate Exam from PDF'), findsOneWidget);
+    expect(find.text('Automated AI Study Assistant'), findsOneWidget);
+
+    // Verify steps
+    expect(find.text('1. SELECT PDF DOCUMENT'), findsOneWidget);
+    expect(find.text('Tap to choose PDF from device'), findsOneWidget);
+    expect(find.text('2. GENERATION PREFERENCES'), findsOneWidget);
+
+    // Client-safe: Gemini API Key configuration step is NOT exposed to clients
+    expect(find.text('3. GEMINI API KEY'), findsNothing);
+    expect(find.textContaining('API Key'), findsNothing);
+
+    // Verify question types checkboxes exist for exam mode
+    expect(find.text('Multiple Choice'), findsOneWidget);
+    expect(find.text('True / False'), findsOneWidget);
+    expect(find.text('Matching Type'), findsOneWidget);
+
+    // Verify action button
+    expect(find.text('Generate Exam Questions'), findsOneWidget);
+  });
+
+  testWidgets('AiGeneratorScreen renders full-screen document generator without API key exposure', (WidgetTester tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: AiGeneratorScreen(
+            defaultSubject: 'Biology',
+            initialMode: 'exam',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify screen title and mode tabs
+    expect(find.text('AI Document Generator'), findsOneWidget);
+    expect(find.text('Exam Questions'), findsOneWidget);
+    expect(find.text('Flashcard Deck'), findsOneWidget);
+
+    // Verify upload card
+    expect(find.text('Upload Lecture Notes or PDF'), findsOneWidget);
+    expect(find.text('Tap to Choose PDF Document'), findsOneWidget);
+
+    // Verify preferences card
+    expect(find.text('Generation Preferences'), findsOneWidget);
+    expect(find.text('Subject / Topic Name'), findsOneWidget);
+    expect(find.text('Multiple Choice'), findsOneWidget);
+    expect(find.text('True / False'), findsOneWidget);
+    expect(find.text('Matching Type'), findsOneWidget);
+
+    // Client-safe: Verify no developer API key fields are shown
+    expect(find.textContaining('API Key'), findsNothing);
+
+    // Verify action button
+    expect(find.text('Generate Exam Questions'), findsOneWidget);
+
+    // Switch to Flashcard Deck mode
+    await tester.tap(find.text('Flashcard Deck'));
+    await tester.pumpAndSettle();
+
+    // Verify updated action button in Flashcard mode
+    expect(find.text('Generate Flashcard Deck'), findsOneWidget);
+  });
+
+  testWidgets('HomeScreen header fits narrow mobile screen (320px) without overflow and renders brand, library, and user chip', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(320, 700);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await container.read(authControllerProvider.notifier).setUsername('Christopher Maximillian');
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: HomeScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Verify brand header rendered without overflow
+    expect(find.text('Studay'), findsOneWidget);
+    expect(find.text('Creator Dashboard'), findsOneWidget);
+    expect(find.byTooltip('My Library'), findsOneWidget);
+    expect(find.text('Christopher'), findsOneWidget);
+
+    // Verify no RenderFlex overflow errors occurred
+    expect(tester.takeException(), isNull);
   });
 }
 

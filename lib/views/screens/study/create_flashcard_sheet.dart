@@ -9,28 +9,91 @@ import '../../../controllers/providers.dart';
 import '../../../controllers/study_controller.dart';
 import '../../../controllers/auth_controller.dart';
 import 'flashcards_screen.dart';
+import '../../components/common/ai_pdf_import_dialog.dart';
 
-/// Shows the bottom sheet / modal dialog for creating or editing a flashcard deck in Study Mode.
+/// Navigation arguments for [CreateFlashcardScreen].
+class CreateFlashcardArgs {
+  final String? initialSubject;
+  final Exam? existingDeck;
+  final List<Map<String, String>>? initialFlashcards;
+
+  const CreateFlashcardArgs({
+    this.initialSubject,
+    this.existingDeck,
+    this.initialFlashcards,
+  });
+}
+
+/// Full screen interface for creating or editing flashcard decks in Study Mode.
+class CreateFlashcardScreen extends StatelessWidget {
+  final String? initialSubject;
+  final Exam? existingDeck;
+  final List<Map<String, String>>? initialFlashcards;
+
+  const CreateFlashcardScreen({
+    super.key,
+    this.initialSubject,
+    this.existingDeck,
+    this.initialFlashcards,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: CreateFlashcardSheet(
+          initialSubject: initialSubject,
+          existingDeck: existingDeck,
+          initialFlashcards: initialFlashcards,
+          isScreen: true,
+        ),
+      ),
+    );
+  }
+}
+
+/// Navigates to the full screen for creating or editing a flashcard deck in Study Mode.
 void showCreateFlashcardSheet({
   required BuildContext context,
   String? initialSubject,
   Exam? existingDeck,
+  List<Map<String, String>>? initialFlashcards,
 }) {
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    backgroundColor: Colors.transparent,
-    builder: (ctx) => CreateFlashcardSheet(
-      initialSubject: initialSubject,
-      existingDeck: existingDeck,
-    ),
-  );
+  if (GoRouter.maybeOf(context) != null) {
+    context.push(
+      '/study/create-flashcard',
+      extra: CreateFlashcardArgs(
+        initialSubject: initialSubject,
+        existingDeck: existingDeck,
+        initialFlashcards: initialFlashcards,
+      ),
+    );
+  } else {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateFlashcardScreen(
+          initialSubject: initialSubject,
+          existingDeck: existingDeck,
+          initialFlashcards: initialFlashcards,
+        ),
+      ),
+    );
+  }
 }
 
 class CreateFlashcardSheet extends ConsumerStatefulWidget {
   final String? initialSubject;
   final Exam? existingDeck;
-  const CreateFlashcardSheet({super.key, this.initialSubject, this.existingDeck});
+  final List<Map<String, String>>? initialFlashcards;
+  final bool isScreen;
+
+  const CreateFlashcardSheet({
+    super.key,
+    this.initialSubject,
+    this.existingDeck,
+    this.initialFlashcards,
+    this.isScreen = false,
+  });
 
   @override
   ConsumerState<CreateFlashcardSheet> createState() => _CreateFlashcardSheetState();
@@ -95,15 +158,29 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
       final subj = widget.initialSubject;
       _selectedSubject = (subj != null && subj.isNotEmpty) ? subj : null;
       _titleController = TextEditingController(
-        text: _selectedSubject != null ? '$_selectedSubject Flashcards' : 'Quick Study Flashcards',
+        text: _selectedSubject != null ? '$_selectedSubject Flashcards' : 'AI Study Flashcards',
       );
       _customSubjectController = TextEditingController();
 
-      // Start with 2 empty cards
-      _cards.addAll([
-        _FlashcardDraft(),
-        _FlashcardDraft(),
-      ]);
+      if (widget.initialFlashcards != null && widget.initialFlashcards!.isNotEmpty) {
+        for (final item in widget.initialFlashcards!) {
+          _cards.add(
+            _FlashcardDraft(
+              front: item['front'] ?? '',
+              back: item['back'] ?? '',
+              hint: item['hint'] ?? '',
+            ),
+          );
+        }
+      }
+
+      // If no cards were supplied, start with 2 empty cards
+      if (_cards.isEmpty) {
+        _cards.addAll([
+          _FlashcardDraft(),
+          _FlashcardDraft(),
+        ]);
+      }
     }
   }
 
@@ -129,6 +206,36 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
       _cards[index].dispose();
       _cards.removeAt(index);
     });
+  }
+
+  void _handleAiFlashcardsGenerated(List<Map<String, String>> generated) {
+    if (generated.isEmpty) return;
+    setState(() {
+      final bool hasOnlyEmpty = _cards.every(
+        (c) => c.frontController.text.trim().isEmpty && c.backController.text.trim().isEmpty,
+      );
+      if (hasOnlyEmpty) {
+        for (final c in _cards) {
+          c.dispose();
+        }
+        _cards.clear();
+      }
+
+      for (final p in generated) {
+        _addCard(
+          front: p['front'] ?? '',
+          back: p['back'] ?? '',
+          hint: p['hint'] ?? '',
+        );
+      }
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Generated ${generated.length} flashcards from PDF with Gemini AI!'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   void _showQuickPasteDialog() {
@@ -498,19 +605,23 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
     final existingSubjects = studyState.subjects.map((s) => s.name).toSet().toList()..sort();
 
     return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.92,
-      ),
+      constraints: widget.isScreen
+          ? null
+          : BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.92,
+            ),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF161622) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-          ),
-        ],
+        borderRadius: widget.isScreen ? null : const BorderRadius.vertical(top: Radius.circular(24)),
+        boxShadow: widget.isScreen
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 24,
+                  offset: const Offset(0, -4),
+                ),
+              ],
       ),
       child: Column(
         children: [
@@ -519,17 +630,19 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
             padding: const EdgeInsets.fromLTRB(20, 14, 16, 10),
             child: Column(
               children: [
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white24 : Colors.black12,
-                      borderRadius: BorderRadius.circular(2),
+                if (!widget.isScreen) ...[
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
+                ],
                 Row(
                   children: [
                     Container(
@@ -688,20 +801,50 @@ class _CreateFlashcardSheetState extends ConsumerState<CreateFlashcardSheet> {
                   const SizedBox(height: 20),
 
                   // Header for Cards List with Quick Paste
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
                     children: [
                       Text(
                         'CARDS (${_cards.length})',
                         style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8),
                       ),
-                      TextButton.icon(
-                        onPressed: _showQuickPasteDialog,
-                        icon: const Icon(Icons.bolt, size: 15, color: AppColors.secondary),
-                        label: const Text(
-                          'Quick Paste Cards',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.secondary),
-                        ),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () {
+                              String effSubject = 'General Study';
+                              if (_isCustomSubject && _customSubjectController.text.trim().isNotEmpty) {
+                                effSubject = _customSubjectController.text.trim();
+                              } else if (_selectedSubject != null && _selectedSubject!.isNotEmpty) {
+                                effSubject = _selectedSubject!;
+                              }
+                              AiPdfImportDialog.show(
+                                context,
+                                isFlashcardMode: true,
+                                defaultSubject: effSubject,
+                                onFlashcardsGenerated: _handleAiFlashcardsGenerated,
+                              );
+                            },
+                            icon: const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF6366F1)),
+                            label: const Text(
+                              'AI from PDF',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: Color(0xFF6366F1)),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _showQuickPasteDialog,
+                            icon: const Icon(Icons.bolt, size: 14, color: AppColors.secondary),
+                            label: const Text(
+                              'Quick Paste Cards',
+                              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.secondary),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
